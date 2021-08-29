@@ -29,7 +29,7 @@ import datetime
 import re
 import io
 from os import PathLike
-from typing import Dict, TYPE_CHECKING, Union, List, Optional, Any, Callable, Tuple, ClassVar, Optional, overload, TypeVar, Type
+from typing import Dict, TYPE_CHECKING, Union, List, Optional, Any, Callable, Tuple, ClassVar, overload, TypeVar, Type
 
 from . import utils
 from .reaction import Reaction
@@ -42,7 +42,7 @@ from .embeds import Embed
 from .member import Member
 from .flags import MessageFlags
 from .file import File
-from .utils import escape_mentions, MISSING
+from .utils import escape_mentions, MISSING, get as _utils_get
 from .guild import Guild
 from .mixins import Hashable
 from .sticker import StickerItem
@@ -927,39 +927,54 @@ class Message(Hashable):
         """
 
         # fmt: off
-        transformations = {
-            re.escape(f'<#{channel.id}>'): '#' + channel.name
-            for channel in self.channel_mentions
+        guild = self.guild
+        if self.guild:
+
+            def resolve_member(id: int) -> str:
+                m = _utils_get(self.mentions, id=id) or guild.get_member(id)
+                return f'@{m.display_name}' if m else '@deleted-user'
+
+            def resolve_role(id: int) -> str:
+                r = _utils_get(self.role_mentions, id=id) or guild.get_role(id)
+                return f'@{r.name}' if r else '@deleted-role'
+
+            def resolve_channel(id: int) -> str:
+                c = guild.get_channel(id)
+                return f'#{c.name}' if c else '#deleted-channel'
+
+        else:
+            state = getattr(self._state, '_parent', self._state)
+            if state:
+
+                def resolve_member(id: int) -> str:
+                    u = _utils_get(self.mentions, id=id) or state.get_user(id)
+                    return f'@{u.name}' if u else '@deleted-user'
+
+            else:
+
+                def resolve_member(id: int) -> str:
+                    return '@deleted-user'
+
+            def resolve_role(id: int) -> str:
+                return '@deleted-role'
+
+            def resolve_channel(id: int) -> str:
+                return '#deleted-channel'
+
+        transforms = {
+            '@': resolve_member,
+            '@!': resolve_member,
+            '#': resolve_channel,
+            '@&': resolve_role,
         }
 
-        mention_transforms = {
-            re.escape(f'<@{member.id}>'): '@' + member.display_name
-            for member in self.mentions
-        }
+        def repl(match: re.Match) -> str:
+            type = match[1]
+            id = int(match[2])
+            transformed = transforms[type](id)
+            return transformed
 
-        # add the <@!user_id> cases as well..
-        second_mention_transforms = {
-            re.escape(f'<@!{member.id}>'): '@' + member.display_name
-            for member in self.mentions
-        }
-
-        transformations.update(mention_transforms)
-        transformations.update(second_mention_transforms)
-
-        if self.guild is not None:
-            role_transforms = {
-                re.escape(f'<@&{role.id}>'): '@' + role.name
-                for role in self.role_mentions
-            }
-            transformations.update(role_transforms)
-
-        # fmt: on
-
-        def repl(obj):
-            return transformations.get(re.escape(obj.group(0)), '')
-
-        pattern = re.compile('|'.join(transformations.keys()))
-        result = pattern.sub(repl, self.content)
+        result = re.sub(r'<(@[!&]?|#)([0-9]{15,20})>', repl, self.content)
         return escape_mentions(result)
 
     @property
