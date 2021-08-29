@@ -342,12 +342,12 @@ class Permissions(BaseFlags):
         """
         return 1 << 10
 
-    @make_permission_alias('read_messages')
+    @make_permission_alias('view_channel')
     def read_messages(self) -> int:
         """:class:`bool`: An alias for :attr:`view_channel`.
 
         .. versionchanged:: 2.0
-            Is now an alias for :attr:`view_channel`.
+            Now an alias for :attr:`view_channel`.
         """
         return 1 << 10
 
