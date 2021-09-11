@@ -13,7 +13,7 @@ discord.py
 
 A modern, easy to use, feature-rich, and async ready API wrapper for Discord written in Python.
 
-This fork simply implements Danny's [slash command DSL](https://gist.github.com/Rapptz/2a7a299aa075427357e9b8a970747c2c) (The class based version).
+This fork simply implements Danny's `slash command DSL <https://gist.github.com/Rapptz/2a7a299aa075427357e9b8a970747c2c>`_ (The class based version).
 
 Key Features
 -------------
