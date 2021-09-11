@@ -13,10 +13,7 @@ discord.py
 
 A modern, easy to use, feature-rich, and async ready API wrapper for Discord written in Python.
 
-The Future of discord.py
---------------------------
-
-Please read the `gist <https://gist.github.com/Rapptz/4a2f62751b9600a31a0d3c78100287f1>`_ for the future of this project. It's been a good one.
+This fork simply implements Danny's [slash command DSL](https://gist.github.com/Rapptz/2a7a299aa075427357e9b8a970747c2c) (The class based version).
 
 Key Features
 -------------
@@ -106,7 +103,7 @@ Bot Example
     async def ping(ctx):
         await ctx.send('pong')
 
-    bot.run('token')
+bot.run('token')
 
 You can find more examples in the examples directory.
 
