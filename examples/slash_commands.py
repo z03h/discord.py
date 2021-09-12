@@ -40,7 +40,7 @@ class Math(ApplicationCommand, name='math'):
 class Client(discord.Client):
     def __init__(self):
         super().__init__()
-        self.add_application_command(Math)
+        self.add_application_commands(Ping, Math)
 
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')
