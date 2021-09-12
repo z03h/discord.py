@@ -26,9 +26,9 @@ Therefore, there are some key differences between the DSL and what is in this fo
 - Slash commands are now a type of "application command" in Discord's API. (This was because of context menus.)
   Therefore, some names have been changed to be consistent with the API.
 
-    - ``SlashCommand`` has been renamed to ``ApplicationCommand``
-    - The namespace ``discord.slash`` has been renamed to ``discord.application_commands``.
-    - ``argument`` is now ``option``. (``slash.argument`` -> ``application_commands.option``)
+  - ``SlashCommand`` has been renamed to ``ApplicationCommand``
+  - The namespace ``discord.slash`` has been renamed to ``discord.application_commands``.
+  - ``argument`` is now ``option``. (``slash.argument`` -> ``application_commands.option``)
 
 - The name for the command callback function is now ``callback`` instead of ``run``.
   This was to keep it consistent with the UI module.
