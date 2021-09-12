@@ -558,7 +558,7 @@ class ApplicationCommandStore:
     ) -> ApplicationCommand:
         options = data.get('options', [])
         resolved = data.get('resolved', {})
-        to_parse = []
+        to_parse = options
 
         # In the first iteration, sanitize the command and options.
         for option in options:
