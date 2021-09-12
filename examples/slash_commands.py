@@ -2,6 +2,13 @@ import discord
 from discord.application_commands import ApplicationCommand, option
 
 
+class Ping(ApplicationCommand, name='ping'):
+    """Pong?"""
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message('Pong!')
+
+
 class Math(ApplicationCommand, name='math'):
     """Basic math operations."""
 
