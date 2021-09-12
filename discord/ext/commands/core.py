@@ -53,6 +53,7 @@ from .converter import run_converters, get_converter, Greedy
 from ._types import _BaseCommand
 from .cog import Cog
 from .context import Context
+from discord.utils import _CaseInsensitiveDict
 
 
 if TYPE_CHECKING:
@@ -182,25 +183,6 @@ def hooked_wrapped_callback(command, ctx, coro):
         return ret
     return wrapped
 
-
-class _CaseInsensitiveDict(dict):
-    def __contains__(self, k):
-        return super().__contains__(k.casefold())
-
-    def __delitem__(self, k):
-        return super().__delitem__(k.casefold())
-
-    def __getitem__(self, k):
-        return super().__getitem__(k.casefold())
-
-    def get(self, k, default=None):
-        return super().get(k.casefold(), default)
-
-    def pop(self, k, default=None):
-        return super().pop(k.casefold(), default)
-
-    def __setitem__(self, k, v):
-        super().__setitem__(k.casefold(), v)
 
 class Command(_BaseCommand, Generic[CogT, P, T]):
     r"""A class that implements the protocol for a bot text command.

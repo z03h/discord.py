@@ -33,6 +33,58 @@ Therefore, there are some key differences between the DSL and what is in this fo
 - The name for the command callback function is now ``callback`` instead of ``run``.
   This was to keep it consistent with the UI module.
 
+Full list of additions
+~~~~~~~~~~~~~~~~~~~~~~
+
+``application_commands`` namespace
+**********************************
+
+- ``application_commands.ApplicationCommand``
+- ``application_commands.ApplicationCommandMeta``
+- ``application_commands.ApplicationCommandOption``
+- ``application_commands.ApplicationCommandOptionChoice``
+- ``application_commands.option``
+
+``interactions`` namespace
+**************************
+
+- ``discord.ApplicationCommand``
+- ``discord.ApplicationCommandOption``
+- ``discord.ApplicationCommandOptionChoice``
+
+ConnectionState
+***************
+
+- ``ConnectionState.add_application_command``
+- ``ConnectionState.update_application_commands``
+
+Client
+******
+
+- ``Client.application_commands``
+- ``Client.add_application_command``
+- ``Client.add_application_commands``
+- ``Client.update_application_commands``
+- ``Client.create_application_command``
+- ``Client.bulk_create_application_commands``
+
+Guild
+*****
+
+- ``Guild.application_commands``
+- ``Guild.add_application_command``
+- ``Guild.add_application_commands``
+- ``Guild.update_application_commands``
+- ``Guild.create_application_command``
+- ``Guild.bulk_create_application_commands``
+
+Events
+******
+
+- ``on_application_command(interaction)``
+- ``on_application_command_completion(interaction)``
+- ``on_application_command_error(interaction, error)``
+
 Notes
 ~~~~~
 

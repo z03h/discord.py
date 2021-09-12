@@ -1562,6 +1562,7 @@ class HTTPClient:
             'name',
             'description',
             'options',
+            'default_permission',
         )
         payload = {k: v for k, v in payload.items() if k in valid_keys}  # type: ignore
         r = Route(
@@ -1640,6 +1641,7 @@ class HTTPClient:
             'name',
             'description',
             'options',
+            'default_permission',
         )
         payload = {k: v for k, v in payload.items() if k in valid_keys}  # type: ignore
         r = Route(

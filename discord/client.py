@@ -33,6 +33,7 @@ from typing import Any, Callable, Coroutine, Dict, Generator, List, Optional, Se
 
 import aiohttp
 
+from . import utils
 from .user import User, ClientUser
 from .invite import Invite
 from .template import Template
@@ -50,7 +51,6 @@ from .activity import ActivityTypes, BaseActivity, create_activity
 from .voice_client import VoiceClient
 from .http import HTTPClient
 from .state import ConnectionState
-from . import utils
 from .utils import MISSING
 from .object import Object
 from .backoff import ExponentialBackoff
@@ -63,6 +63,7 @@ from .threads import Thread
 from .sticker import GuildSticker, StandardSticker, StickerPack, _sticker_factory
 
 if TYPE_CHECKING:
+    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand
     from .abc import SnowflakeTime, PrivateChannel, GuildChannel, Snowflake
     from .channel import DMChannel
     from .message import Message
@@ -193,6 +194,11 @@ class Client:
         To enable these events, this must be set to ``True``. Defaults to ``False``.
 
         .. versionadded:: 2.0
+    update_application_commands_at_startup: :class:`bool`
+        Whether or not to automatically call :meth:`.Client.update_application_commands` at startup.
+        Defaults to ``True``.
+
+        .. versionadded:: 2.0
 
     Attributes
     -----------
@@ -229,6 +235,8 @@ class Client:
         }
 
         self._enable_debug_events: bool = options.pop('enable_debug_events', False)
+        self._update_commands_at_startup: bool = options.pop('update_application_commands_at_startup', True)
+
         self._connection: ConnectionState = self._get_state(**options)
         self._connection.shard_count = self.shard_count
         self._closed: bool = False
@@ -516,13 +524,14 @@ class Client:
                 self.dispatch('disconnect')
                 ws_params.update(sequence=self.ws.sequence, resume=e.resume, session=self.ws.session_id)
                 continue
-            except (OSError,
-                    HTTPException,
-                    GatewayNotFound,
-                    ConnectionClosed,
-                    aiohttp.ClientError,
-                    asyncio.TimeoutError) as exc:
-
+            except (
+                OSError,
+                HTTPException,
+                GatewayNotFound,
+                ConnectionClosed,
+                aiohttp.ClientError,
+                asyncio.TimeoutError
+            ) as exc:
                 self.dispatch('disconnect')
                 if not reconnect:
                     await self.close()
@@ -598,12 +607,18 @@ class Client:
 
         A shorthand coroutine for :meth:`login` + :meth:`connect`.
 
+        The client will also attempt to update application commands here
+        if the ``update_application_commands_at_startup`` option is enabled.
+
         Raises
         -------
         TypeError
             An unexpected keyword argument was received.
         """
         await self.login(token)
+        if self._update_commands_at_startup:
+            await self.update_application_commands()
+
         await self.connect(reconnect=reconnect)
 
     def run(self, *args: Any, **kwargs: Any) -> None:
@@ -1096,11 +1111,7 @@ class Client:
             if me is None:
                 continue
 
-            if activity is not None:
-                me.activities = (activity,)
-            else:
-                me.activities = ()
-
+            me.activities = (activity,) if activity is not None else ()
             me.status = status
 
     # Guild stuff
@@ -1268,11 +1279,7 @@ class Client:
             The guild created. This is not the same guild that is
             added to cache.
         """
-        if icon is not MISSING:
-            icon_base64 = utils._bytes_to_base64_data(icon)
-        else:
-            icon_base64 = None
-
+        icon_base64 = None if icon is MISSING else utils._bytes_to_base64_data(icon)
         region_value = str(region)
 
         if code:
@@ -1599,6 +1606,51 @@ class Client:
 
         data = await state.http.start_private_message(user.id)
         return state.add_dm_channel(data)
+
+    # The "guild_ids" parameter was removed in order to discourage API abuse (Each guild would mean another API call)
+    def add_application_command(self, command: NativeApplicationCommand, *, guild_id: int = None) -> None:
+        """Queues an application command to be eventually added.
+
+        To directly add a command, see :meth:`.Client.create_application_command`
+        or :meth:`.Client.bulk_create_application_commands`.
+
+        Parameters
+        ----------
+        command: Type[:class:`.application_commands.ApplicationCommand`]
+            The application command to queue.
+        guild_id: int
+            The ID of the guild that this command should be added to.
+            Leave blank to make this global.
+        """
+        if not guild_id:
+            self._connection._queued_global_application_commands[command.__application_command_name__] = command
+            return
+
+        self._connection._queued_guild_application_commands[guild_id][command.__application_command_name__] = command
+
+    def add_application_commands(self, *commands: NativeApplicationCommand, guild_id: int = None) -> None:
+        """Queues multiple application commands at once to be eventually added.
+
+        The directly add commands, see :meth:`.Client.bulk_create_application_commands`.
+
+        Parameters
+        ----------
+        *commands: Type[:class:`.application_commands.ApplicationCommand`]
+            A list of commands to queue.
+        guild_id: int
+            The ID of the guild that these commands should be added to.
+            Leave blank to make them global.
+        """
+        for command in commands:
+            self.add_application_command(command, guild_id=guild_id)
+
+    async def update_application_commands(self) -> None:
+        """|coro|
+
+        Bulk-upserts and registers all queued application commands.
+        To queue commands, see :meth:`.Client.add_application_command`.
+        """
+        await self._connection.update_application_commands()
 
     def add_view(self, view: View, *, message_id: Optional[int] = None) -> None:
         """Registers a :class:`~discord.ui.View` for persistent listening.

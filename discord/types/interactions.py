@@ -39,8 +39,11 @@ if TYPE_CHECKING:
 
 ApplicationCommandType = Literal[1, 2, 3]
 
+
 class _ApplicationCommandOptional(TypedDict, total=False):
+    guild_id: int
     options: List[ApplicationCommandOption]
+    default_permission: bool
     type: ApplicationCommandType
 
 
@@ -49,6 +52,7 @@ class ApplicationCommand(_ApplicationCommandOptional):
     application_id: Snowflake
     name: str
     description: str
+    version: Snowflake
 
 
 class _ApplicationCommandOptionOptional(TypedDict, total=False):
@@ -158,6 +162,8 @@ class _ApplicationCommandInteractionDataOptional(TypedDict, total=False):
     options: List[ApplicationCommandInteractionDataOption]
     resolved: ApplicationCommandInteractionDataResolved
     target_id: Snowflake
+    guild_id: Snowflake
+    channel_id: Snowflake
     type: ApplicationCommandType
 
 

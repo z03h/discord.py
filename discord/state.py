@@ -25,16 +25,17 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 import asyncio
-from collections import deque, OrderedDict
 import copy
 import datetime
+import inspect
 import itertools
 import logging
-from typing import Dict, Optional, TYPE_CHECKING, Union, Callable, Any, List, TypeVar, Coroutine, Sequence, Tuple, Deque
-import inspect
-
 import os
 
+from collections import deque, defaultdict, OrderedDict
+from typing import Dict, Optional, TYPE_CHECKING, Union, Callable, Any, List, TypeVar, Coroutine, Sequence, Tuple, Deque
+
+from . import utils
 from .guild import Guild
 from .activity import BaseActivity
 from .user import User, ClientUser
@@ -48,12 +49,11 @@ from .raw_models import *
 from .member import Member
 from .role import Role
 from .enums import ChannelType, try_enum, Status
-from . import utils
 from .flags import ApplicationFlags, Intents, MemberCacheFlags
 from .object import Object
 from .invite import Invite
 from .integrations import _integration_factory
-from .interactions import Interaction
+from .interactions import Interaction, ApplicationCommand
 from .ui.view import ViewStore, View
 from .stage_instance import StageInstance
 from .threads import Thread, ThreadMember
@@ -61,6 +61,7 @@ from .sticker import GuildSticker
 
 if TYPE_CHECKING:
     from .abc import PrivateChannel
+    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand
     from .message import MessageableChannel
     from .guild import GuildChannel, VocalGuildChannel
     from .http import HTTPClient
@@ -71,6 +72,7 @@ if TYPE_CHECKING:
     from .types.activity import Activity as ActivityPayload
     from .types.channel import DMChannel as DMChannelPayload
     from .types.user import User as UserPayload
+    from .types.interactions import ApplicationCommand as ApplicationCommandPayload
     from .types.emoji import Emoji as EmojiPayload
     from .types.sticker import GuildSticker as GuildStickerPayload
     from .types.guild import Guild as GuildPayload
@@ -189,11 +191,7 @@ class ConnectionState:
 
         status = options.get('status', None)
         if status:
-            if status is Status.offline:
-                status = 'invisible'
-            else:
-                status = str(status)
-
+            status = 'invisible' if status is Status.offline else str(status)
         intents = options.get('intents', None)
         if intents is not None:
             if not isinstance(intents, Intents):
@@ -224,6 +222,11 @@ class ConnectionState:
         self._status: Optional[str] = status
         self._intents: Intents = intents
 
+        self._queued_global_application_commands: Dict[str, NativeApplicationCommand] = {}
+        self._queued_guild_application_commands: Dict[int, Dict[str, NativeApplicationCommand]] = defaultdict(dict)
+
+        self.cached_application_commands: Dict[int, ApplicationCommand] = {}
+
         if not intents.members or cache_flags._empty:
             self.store_user = self.create_user  # type: ignore
             self.deref_user = self.deref_user_no_intents  # type: ignore
@@ -235,7 +238,7 @@ class ConnectionState:
 
         self.clear()
 
-    def clear(self, *, views: bool = True) -> None:
+    def clear(self, *, views: bool = True, application_commands: bool = True) -> None:
         self.user: Optional[ClientUser] = None
         # Originally, this code used WeakValueDictionary to maintain references to the
         # global user mapping.
@@ -255,6 +258,9 @@ class ConnectionState:
         self._guilds: Dict[int, Guild] = {}
         if views:
             self._view_store: ViewStore = ViewStore(self)
+        if application_commands:
+            from .application_commands import ApplicationCommandStore
+            self._application_commands_store: ApplicationCommandStore = ApplicationCommandStore(self)
 
         self._voice_clients: Dict[int, VoiceProtocol] = {}
 
@@ -411,6 +417,10 @@ class ConnectionState:
     def private_channels(self) -> List[PrivateChannel]:
         return list(self._private_channels.values())
 
+    @property
+    def application_commands(self) -> List[ApplicationCommand]:
+        return list(self.cached_application_commands.values())
+
     def _get_private_channel(self, channel_id: Optional[int]) -> Optional[PrivateChannel]:
         try:
             # the keys of self._private_channels are ints
@@ -474,6 +484,11 @@ class ConnectionState:
 
         return channel or PartialMessageable(state=self, id=channel_id), guild
 
+    def add_application_command(self, data: ApplicationCommandPayload) -> ApplicationCommand:
+        command = ApplicationCommand(data=data, state=self)
+        self.cached_application_commands[command.id] = command
+        return command
+
     async def chunker(
         self, guild_id: int, query: str = '', limit: int = 0, presences: bool = False, *, nonce: Optional[str] = None
     ) -> None:
@@ -498,6 +513,43 @@ class ConnectionState:
         except asyncio.TimeoutError:
             _log.warning('Timed out waiting for chunks with query %r and limit %d for guild_id %d', query, limit, guild_id)
             raise
+
+    async def update_global_application_commands(self) -> None:
+        payload = [
+            command.to_dict()
+            for command in self._queued_global_application_commands.values()
+        ]
+        response = await self.http.bulk_upsert_global_commands(self.self_id or self.application_id, payload)
+
+        for data in response:
+            command = self.add_application_command(data)
+            native_command = self._queued_global_application_commands[command.name]
+            self._application_commands_store.store_command(command.id, native_command)
+
+        self._queued_global_application_commands = {}
+
+    async def update_guild_application_commands(self, guild_id: int) -> None:
+        queue = self._queued_guild_application_commands[guild_id]
+
+        payload = [
+            command.to_dict()
+            for command in queue.values()
+        ]
+        response = await self.http.bulk_upsert_guild_commands(self.self_id or self.application_id, guild_id, payload)
+
+        for data in response:
+            command = self.add_application_command(data)
+            self._application_commands_store.store_command(command.id, queue[command.name])
+
+        queue.clear()
+
+    async def update_application_commands(self) -> None:
+        for guild_id, value in self._queued_guild_application_commands.items():
+            if len(value):
+                await self.update_guild_application_commands(guild_id)
+
+        if len(self._queued_global_application_commands):
+            await self.update_global_application_commands()
 
     async def _delay_ready(self) -> None:
         try:
@@ -550,7 +602,7 @@ class ConnectionState:
             self._ready_task.cancel()
 
         self._ready_state = asyncio.Queue()
-        self.clear(views=False)
+        self.clear(views=False, application_commands=False)
         self.user = ClientUser(state=self, data=data['user'])
         self.store_user(data['user'])
 
@@ -700,6 +752,10 @@ class ConnectionState:
 
     def parse_interaction_create(self, data) -> None:
         interaction = Interaction(data=data, state=self)
+
+        if data['type'] == 2:  # application command
+            self._application_commands_store.dispatch(data['data'], interaction)
+
         if data['type'] == 3:  # interaction component
             custom_id = interaction.data['custom_id']  # type: ignore
             component_type = interaction.data['component_type']  # type: ignore

@@ -27,11 +27,12 @@ from __future__ import annotations
 import inspect
 import sys
 
+from collections import defaultdict
 from dataclasses import dataclass
 
 from .abc import GuildChannel, Messageable, Snowflake
-from .channel import TextChannel
-from .enums import ApplicationCommandType, ApplicationCommandOptionType
+from .channel import TextChannel, _guild_channel_factory
+from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType
 from .member import Member
 from .object import Object
 from .role import Role
@@ -54,10 +55,13 @@ from typing import (
 
 if TYPE_CHECKING:
     from .interactions import Interaction
+    from .state import ConnectionState
+
     from .types.interactions import (
         ApplicationCommand as ApplicationCommandPayload,
         ApplicationCommandOption as ApplicationCommandOptionPayload,
         ApplicationCommandOptionChoice as ApplicationCommandOptionChoicePayload,
+        ApplicationCommandInteractionData,
     )
 
     ApplicationCommandOptionTypeT = Union[
@@ -93,9 +97,17 @@ OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
     float: ApplicationCommandOptionType.number,
 }
 
+__all__ = (
+    'ApplicationCommand',
+    'ApplicationCommandMeta',
+    'ApplicationCommandOption',
+    'ApplicationCommandOptionChoice',
+    'option',
+)
+
 
 class ApplicationCommandOptionChoice(NamedTuple):
-    """Represents a choice of an :class:`~.ApplicationCommandOption`.
+    """Represents a choice of an :class:`.ApplicationCommandOption`.
 
     Parameters
     ----------
@@ -119,9 +131,9 @@ class ApplicationCommandOptionChoice(NamedTuple):
 
 @dataclass
 class ApplicationCommandOption:
-    """Represents an option of an :class:`~.ApplicationCommand`.
+    """Represents an option of an :class:`.ApplicationCommand`.
 
-    These should be constructed via :meth:`~.option`.
+    These should be constructed via :func:`.option`.
     """
     type: ApplicationCommandOptionType
     name: str
@@ -160,13 +172,13 @@ def option(
     optional: bool = MISSING,
     choices: Union[Dict[str, Union[str, float]], Sequence[ApplicationCommandOptionChoice]] = MISSING,
 ) -> ApplicationCommandOption:
-    """Creates an application command option which can be used on :class:`~.ApplicationCommand`s.
+    """Creates an application command option which can be used on :class:`.ApplicationCommand`s.
 
     All parameters here are keyword-only.
 
     Parameters
     ----------
-    type: Union[:class:`.ApplicationCommandType`, type]
+    type: Union[:class:`~.ApplicationCommandType`, type]
         The type of this option. Defaults to the annotation given with this option, or ``str``.
     name: str
         The name of this option.
@@ -176,15 +188,15 @@ def option(
         Whether or not this option is required. Defaults to ``False``.
     optional: bool
         An inverted alias for ``required``. This cannot be used with ``required``, and vice-versa.
-    choices: Union[Dict[str, Union[str, int, float]], Sequence[Union[str, int, float]], Sequence[ApplicationCommandOptionChoice]]
+    choices: Union[Dict[str, Union[str, int, float]], Sequence[Union[str, int, float]], Sequence[:class:`.ApplicationCommandOptionChoice`]]
         If specified, only the choices given will be available to be selected by the user.
 
         Argument should either be a mapping of choice names and their return values,
-        A sequence of the possible choices, or a sequence of :class:`~.ApplicationCommandOptionChoice`.
+        A sequence of the possible choices, or a sequence of :class:`.ApplicationCommandOptionChoice`.
 
     Returns
     -------
-    :class:`~.ApplicationCommandOption`
+    :class:`.ApplicationCommandOption`
     """
 
     if required is not MISSING and optional is not MISSING:
@@ -217,7 +229,7 @@ def option(
 
     return ApplicationCommandOption(
         type=type,
-        name=name,
+        name=name.casefold() if name else name,
         description=description,
         required=required,
         choices=choices,
@@ -303,7 +315,7 @@ def _get_application_command_options(
                 value.type = ApplicationCommandOptionType.string
 
         if value.name is MISSING:
-            value.name = name
+            value.name = name.casefold()
 
         result[name] = value
 
@@ -314,7 +326,7 @@ def _get_application_command_options(
 
             result[attr] = res = option(**option_kwargs)
             if res.name is MISSING:
-                res.name = attr
+                res.name = attr.casefold()
 
             if res.type is MISSING:
                 _resolve_option_annotation(res, annotation, args=args)
@@ -337,21 +349,24 @@ class ApplicationCommandMeta(type):
         The description of this command. Must be present here or as a doc-string.
     parent: Type[:class:`.ApplicationCommand`]
         The parent command of this command. Note that parent commands can't have callbacks.
-
+    default_permission: bool
+        Whether or not this command is enabled by default when added to a guild.
+        Defaults to ``True``
+    option_kwargs: Dict[str, Any]:
+        Default kwargs to pass in for each option.
     """
 
     if TYPE_CHECKING:
-        type: ApplicationCommandType
-        name: str
-        description: str
-        parent: ApplicationCommandMeta
-        default_permission: bool
-
-        __application_command_children__: List[ApplicationCommand]
+        __application_command_type__: ApplicationCommandType
+        __application_command_name__: str
+        __application_command_description__: str
+        __application_command_default_permission__: bool
         __application_command_options__: Dict[str, ApplicationCommandOption]
+        __application_command_parent__: ApplicationCommandMeta
+        __application_command_children__: Dict[str, ApplicationCommand]
 
     def __new__(
-        mcs: Type[SlashCommandMeta],
+        mcs: Type[ApplicationCommandMeta],
         cls_name: str,
         bases: Tuple[type, ...],
         attrs: Dict[str, Any],
@@ -363,7 +378,7 @@ class ApplicationCommandMeta(type):
         default_permission: bool = True,
         option_kwargs: Dict[str, Any] = MISSING,
         **kwargs,
-    ) -> SlashCommandMeta:
+    ) -> ApplicationCommandMeta:
         if not isinstance(type, ApplicationCommandType):
             raise TypeError('application command types must be an ApplicationCommandType.')
 
@@ -380,43 +395,43 @@ class ApplicationCommandMeta(type):
                 raise TypeError('application commands must have a description.')
 
         attrs.update(
-            type=type,
-            name=name,
-            description=description,
-            parent=parent,
-            default_permission=default_permission,
+            __application_command_type__=type,
+            __application_command_name__=name.casefold(),
+            __application_command_description__=description,
+            __application_command_parent__=parent,
+            __application_command_default_permission__=default_permission,
         )
 
         attrs['__application_command_options__'] = _get_application_command_options(attrs, option_kwargs=option_kwargs)
-        attrs['__application_command_children__'] = children = []
+        attrs['__application_command_children__'] = children = {}
 
         cls = super().__new__(mcs, cls_name, bases, attrs, **kwargs)
 
         if parent is not MISSING:
-            parent.__application_command_children__.append(cls)
+            parent.__application_command_children__[cls.__application_command_name__] = cls
 
         for name, value in attrs.items():
             if isinstance(value, mcs):
-                children.append(value)
-                value.parent = cls
+                children[value.__application_command_name__] = value
+                value.__application_command_parent__ = cls
 
         return cls
 
     def to_option_dict(cls) -> ApplicationCommandOptionPayload:
         payload = {
-            'name': cls.name,
-            'description': cls.description,
+            'name': cls.__application_command_name__,
+            'description': cls.__application_command_description__,
             'options': [],
         }
 
-        if children := cls.__application_command_children__:
+        if len(children := cls.__application_command_children__):
             option_type = ApplicationCommandOptionType.subcommand_group
-            payload['options'] += [command.to_option_dict() for command in children]
+            payload['options'] += [command.to_option_dict() for command in children.values()]
         else:
             option_type = ApplicationCommandOptionType.subcommand
 
         if len(options := cls.__application_command_options__):
-            payload['options'] = [option.to_dict() for option in options.values()]
+            payload['options'] += [option.to_dict() for option in options.values()]
 
         if not payload['options']:
             del payload['options']
@@ -426,15 +441,17 @@ class ApplicationCommandMeta(type):
 
     def to_dict(cls) -> ApplicationCommandPayload:
         payload = {
-            'type': cls.type.value,
-            'name': cls.name,
-            'description': cls.description,
-            'default_permission': cls.default_permission,
+            'type': cls.__application_command_type__.value,
+            'name': cls.__application_command_name__,
+            'default_permission': cls.__application_command_default_permission__,
             'options': [],
         }
 
-        if children := cls.__application_command_children__:
-            payload['options'] += [command.to_option_dict() for command in children]
+        if cls.__application_command_type__ is ApplicationCommandType.chat_input:
+            payload['description'] = cls.__application_command_description__
+
+        if len(children := cls.__application_command_children__):
+            payload['options'] += [command.to_option_dict() for command in children.values()]
 
         if len(options := cls.__application_command_options__):
             payload['options'] += [option.to_dict() for option in options.values()]
@@ -458,7 +475,7 @@ class ApplicationCommand(metaclass=ApplicationCommandMeta):
 
         Parameters
         ----------
-        interaction: :class:`.Interaction`
+        interaction: :class:`~.Interaction`
             The interaction to check.
 
         Returns
@@ -474,7 +491,7 @@ class ApplicationCommand(metaclass=ApplicationCommandMeta):
         The error handler for when an error is raised either during the :meth:`command_check`
         or during the :meth:`callback`.
 
-        If an error is raised here, ``on_application_command_error`` will be dispatched.
+        If an error is raised here, :func:`on_application_command_error` will be dispatched.
 
         Parameters
         ----------
@@ -492,6 +509,132 @@ class ApplicationCommand(metaclass=ApplicationCommandMeta):
 
         Parameters
         ----------
-        interaction: :class:`.Interaction`
+        interaction: :class:`~.Interaction`
             The interaction created when this command was invoked.
         """
+
+
+class ApplicationCommandStore:
+    def __init__(self, state: ConnectionState) -> None:
+        self.state: ConnectionState = state
+        self.commands: Dict[int, ApplicationCommandMeta] = {}
+
+    def store_command(self, id: int, command: ApplicationCommandMeta) -> None:
+        self.commands[id] = command
+
+    async def _handle_error(
+        self,
+        command: ApplicationCommand,
+        interaction: discord.Interaction,
+        error: Exception
+    ) -> None:
+        try:
+            await command.command_error(interaction, error)
+        except Exception as exc:
+            self.state.dispatch('application_command_error', interaction, exc)
+
+    async def invoke(self, command: ApplicationCommand, interaction: discord.Interaction) -> None:
+        self.state.dispatch('application_command', interaction)
+
+        try:
+            can_run = await command.command_check(interaction)
+        except Exception as exc:
+            return await self._handle_error(command, interaction, exc)
+
+        if can_run:
+            try:
+                await command.callback(interaction)
+            except Exception as exc:
+                return await self._handle_error(command, interaction, exc)
+            else:
+                self.state.dispatch('application_command_completion', interaction)
+
+    def _parse_options(
+        self,
+        *,
+        data: ApplicationCommandInteractionData,
+        command: ApplicationCommandMeta,
+        guild_id: int,
+    ) -> ApplicationCommand:
+        options = data['options']
+        resolved = data.get('resolved', {})
+        to_parse = []
+
+        # In the first iteration, sanitize the command and options.
+        for option in options:
+            if option['type'] < 3:
+                command = command.__application_command_children__[option['name']]
+                to_parse = option['options']
+
+                if option['type'] == 2:
+                    command = command.__application_command_children__[to_parse[0]['name']]
+                    to_parse = to_parse[0]['options']
+
+                break
+
+        command = command()
+
+        for key in command.__class__.__application_command_options__:
+            setattr(command, key, None)  # For options that were not given
+
+        maybe_guild = self.state._get_guild(guild_id)
+
+        for option in to_parse:
+            value = option['value']
+            type = option['type']
+
+            if type == 6:
+                user_data = member_data = None
+
+                if value in resolved['users']:
+                    user_data = resolved['users'][value]
+
+                if value in resolved['members']:
+                    member_data = resolved['members'][value]
+
+                if user_data and member_data:
+                    member_data['user'] = user_data
+
+                if member_data is not None and maybe_guild:
+                    value = Member(data=member_data, state=self.state, guild=maybe_guild)
+                else:
+                    value = User(data=user_data, state=self.state)
+
+            elif type == 7:
+                # Prefer from cache
+                cached = self.state.get_channel(int(value))
+                if cached is None:
+                    channel_data = defaultdict(lambda: None)
+                    channel_data.update(resolved['channels'][value])
+                    factory, _ = _guild_channel_factory(channel_data['type'])
+                    value = factory(state=self.state, data=channel_data, guild=maybe_guild)
+                else:
+                    value = cached
+
+            elif type == 8:
+                # Here we prefer from payload instead, as the data
+                # is more up to date.
+                role_data = resolved['roles'][value]
+                value = Role(state=self.state, data=role_data, guild=maybe_guild)
+
+            elif type == 9:
+                value = Object(id=int(value))
+
+            for k, v in command.__class__.__application_command_options__.items():
+                v: ApplicationCommandOption
+                if v.name == option['name']:
+                    setattr(command, k, value)
+                    break
+
+        return command
+
+    def dispatch(self, data: ApplicationCommandInteractionData, interaction: discord.Interaction) -> None:
+        try:
+            command_factory = self.commands[int(data['id'])]
+        except KeyError:
+            return
+
+        command = self._parse_options(data=data, command=command_factory, guild_id=interaction.guild_id)
+        self.state.loop.create_task(
+            self.invoke(command, interaction), name=f'discord-application-commands-dispatch-{interaction.id}'
+        )

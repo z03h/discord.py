@@ -25,11 +25,13 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
+
 import asyncio
+from typing import Any, Dict, List, NamedTuple, Optional, Type, TYPE_CHECKING, Tuple, TypeVar, Union
 
 from . import utils
-from .enums import try_enum, InteractionType, InteractionResponseType
+from .mixins import Hashable
+from .enums import try_enum, InteractionType, InteractionResponseType, ApplicationCommandType, ApplicationCommandOptionType
 from .errors import InteractionResponded, HTTPException, ClientException
 from .channel import PartialMessageable, ChannelType
 
@@ -44,18 +46,30 @@ __all__ = (
     'Interaction',
     'InteractionMessage',
     'InteractionResponse',
+    'ApplicationCommand',
+    'ApplicationCommandOption',
+    'ApplicationCommandOptionChoice',
 )
 
 if TYPE_CHECKING:
+    from aiohttp import ClientSession
+
     from .types.interactions import (
         Interaction as InteractionPayload,
         InteractionData,
+        ApplicationCommand as ApplicationCommandPayload,
+        ApplicationCommandOption as ApplicationCommandOptionPayload,
+    )
+
+    from .application_commands import ApplicationCommandOption as NativeCommandOption
+    from .enums import (
+        ApplicationCommandType,
+        ApplicationCommandOptionType
     )
     from .guild import Guild
     from .state import ConnectionState
     from .file import File
     from .mentions import AllowedMentions
-    from aiohttp import ClientSession
     from .embeds import Embed
     from .ui.view import View
     from .channel import VoiceChannel, StageChannel, TextChannel, CategoryChannel, StoreChannel, PartialMessageable
@@ -65,7 +79,294 @@ if TYPE_CHECKING:
         VoiceChannel, StageChannel, TextChannel, CategoryChannel, StoreChannel, Thread, PartialMessageable
     ]
 
+    OptionT = TypeVar('OptionT', bound='ApplicationCommandOption')
+
 MISSING: Any = utils.MISSING
+
+
+class ApplicationCommandOptionChoice(NamedTuple):
+    """Represents a choice of an :class:`.ApplicationCommandOption`.
+    This is not to be confused with :class:`.application_commands.ApplicationCommandOptionChoice`.
+
+    Attributes
+    ----------
+    name: str
+        The name of this option choice.
+    value: Union[str, int, float]
+        The value that will be returned when this choice is chosen.
+    """
+    name: str
+    value: Union[str, float]
+
+
+class ApplicationCommandOption(NamedTuple):
+    """Represents an option of an :class:`.ApplicationCommand`.
+
+    This is not to be confused with :class:`.application_commands.ApplicationCommandOption`.
+
+    Attributes
+    ----------
+    type: :class:`.ApplicationCommandOptionType`
+        The type of this option.
+    name: str
+        The name of this option.
+    description: str
+        The description of this option.
+    required: bool
+        Whether or not this option is required.
+    choices: Optional[List[:class:`.ApplicationCommandOptionChoice`]]
+        A list of choices this option takes.
+    options: Optional[List[:class:`.ApplicationCommandOption`]]
+        The parameters/subcommands this option takes.
+        ``None`` unless this has a ``type`` of ``subcommand`` or ``subcommand_group``.
+    """
+    type: ApplicationCommandOptionType
+    name: str
+    description: str
+    required: bool = False
+    choices: Optional[List[ApplicationCommandOptionChoice]] = None
+    options: Optional[List[ApplicationCommandOption]] = None
+
+    @classmethod
+    def from_dict(cls: Type[OptionT], data: ApplicationCommandOptionPayload) -> OptionT:
+        args = [
+            ApplicationCommandOptionType(data['type']),
+            data['name'],
+            data['description'],
+            data.get('required', False),
+        ]
+
+        if 'choices' in data:
+            args.append([
+                ApplicationCommandOptionChoice(**choice)
+                for choice in data['choices']
+            ])
+        else:
+            args.append(None)
+
+        if 'options' in data:
+            args.append([
+                ApplicationCommandOption.from_dict(option)
+                for option in data['options']
+            ])
+
+        return cls(*args)
+
+
+class ApplicationCommand(Hashable):
+    """Represents an application command.
+
+    This is not to be confused with :class:`.application_commands.ApplicationCommand`.
+    See that if you want to construct your own application commands.
+
+    .. container:: operations
+
+        .. describe:: x == y
+
+            Checks if two commands are equal.
+
+        .. describe:: x != y
+
+            Checks if two commands are not equal.
+
+        .. describe:: hash(x)
+
+            Returns the command's hash.
+
+        .. describe:: str(x)
+
+            Returns the name of this command.
+
+    Attributes
+    ----------
+    type: :class:`.ApplicationCommandType`
+        The type of this command.
+    name: str
+        The name of this command.
+    description: str
+        The description of this command.
+        This is always an empty string if the ``type`` of this command is not ``chat_input``.
+    id: int
+        The snowflake ID of this command.
+    guild_id: Optional[int]
+        The ID of the guild this belongs to.
+        If this is a global command, this will be ``None``.
+    application_id: str
+        The ID of the application that this command belongs to.
+    options: Optional[List[:class:`.ApplicationCommandOption`]
+        A list of parameters that this command takes.
+    default_permission: bool
+        Whether or not this command is enabled by default when it is added to a guild.
+    version: int
+        Auto-incrementing version identifier updated during substantial record changes.
+    """
+
+    if TYPE_CHECKING:
+        _state: ConnectionState
+        type: ApplicationCommandType
+        name: str
+        description: str
+        id: int
+        guild_id: Optional[int]
+        application_id: int
+        options: Optional[List[ApplicationCommandOption]]
+        default_permission: bool
+        version: int
+
+    __slots__: Tuple[str, ...] = (
+        '_state',
+        'type',
+        'name',
+        'description',
+        'id',
+        'guild_id',
+        'application_id',
+        'options',
+        'default_permission',
+        'version',
+    )
+
+    def __init__(self, *, data: ApplicationCommandPayload, state: ConnectionState) -> None:
+        self._state: ConnectionState = state
+        self._from_data(data)
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        guild_id = f' guild_id={self.guild_id}' if self.guild_id else ''
+        return f'<ApplicationCommand id={self.id}{guild_id} name={self.name!r} type={self.type.name!r}>'
+
+    def _from_data(self, data: ApplicationCommandPayload) -> None:
+        self.type = ApplicationCommandType(data.get('type', 1))
+        self.name = data['name']
+        self.description = data['description']
+        self.id = utils._get_as_snowflake(data, 'id')
+        self.guild_id = utils._get_as_snowflake(data, 'guild_id')
+        self.application_id = utils._get_as_snowflake(data, 'application_id')
+        self.default_permission = data.get('default_permission', True)
+        self.version = data['version']
+
+        if 'options' in data:
+            self.options = [
+                ApplicationCommandOption.from_dict(option)
+                for option in data['options']
+            ]
+        else:
+            self.options = None
+
+    @property
+    def guild(self) -> Optional[Guild]:
+        """:class:`.Guild`: The guild that this command belongs to.
+
+        This is retrieved from the internal cache.
+        If this is a global command or if the guild isn't stored in the cache,
+        this will be ``None``.
+        """
+        if not self.guild_id:
+            return None
+
+        return self._state._get_guild(self.guild_id)
+
+    def is_global(self) -> bool:
+        """bool: Whether or not this command is a global command."""
+        return self.guild_id is None
+
+    async def edit(
+        self,
+        *,
+        name: str = MISSING,
+        description: str = MISSING,
+        options: List[NativeCommandOption] = MISSING,
+        default_permission: bool = MISSING,
+    ) -> ApplicationCommand:
+        """|coro|
+
+        Modifies this application command.
+        All parameters here are keyword-only and optional.
+
+        Parameters
+        ----------
+        name: str
+            The new name of this command.
+        description: str
+            The new description of this command.
+        options: List[:class:`.application_commands.ApplicationCommandOption`]
+            A new list of options for this command.
+            These should be made using the :func:`.application_commands.option` factory.
+        default_permission: bool
+            Whether or not this command should be enabled by default when added to a guild.
+
+        Raises
+        ------
+        Forbidden
+            You do not own this application command.
+        HTTPException
+            There was an error creating this command.
+
+        Returns
+        -------
+        :class:`.ApplicationCommand`
+            The newly edited command.
+        """
+        payload = {}
+
+        if name is not MISSING:
+            payload['name'] = name
+
+        if description is not MISSING:
+            payload['description'] = description
+
+        if options is not MISSING:
+            payload['options'] = [option.to_dict() for option in options]
+
+        if default_permission is not MISSING:
+            payload['default_permission'] = default_permission
+
+        if self.guild_id:
+            coro = self._state.http.edit_guild_command(
+                self.application_id,
+                self.guild_id,
+                self.id,
+                payload
+            )
+        else:
+            coro = self._state.http.edit_global_command(
+                self.application_id,
+                self.id,
+                payload
+            )
+
+        new = ApplicationCommand(data=await coro, state=self._state)
+        self._state.cached_application_commands[self.id] = new
+        return new
+
+    async def delete(self) -> None:
+        """|coro|
+
+        Deletes this application command.
+
+        Raises
+        ------
+        Forbidden
+            You cannot delete this command.
+        HTTPException
+            There was an error deleting this command.
+        """
+        if self.guild_id:
+            coro = self._state.http.delete_guild_command(
+                self.application_id,
+                self.guild_id,
+                self.id,
+            )
+        else:
+            coro = self._state.http.delete_global_command(
+                self.application_id,
+                self.id,
+            )
+
+        await coro
+        self._state.cached_application_commands.pop(self.id, None)
 
 
 class Interaction:

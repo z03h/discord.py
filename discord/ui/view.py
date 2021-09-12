@@ -467,7 +467,7 @@ class ViewStore:
         # fmt: off
         views = {
             view.id: view
-            for (_, (view, _)) in self._views.items()
+            for view, _ in self._views.values()
             if view.is_persistent()
         }
         # fmt: on

@@ -180,6 +180,26 @@ class classproperty(Generic[T_co]):
         raise AttributeError('cannot set attribute')
 
 
+class _CaseInsensitiveDict(dict):
+    def __contains__(self, k):
+        return super().__contains__(k.casefold())
+
+    def __delitem__(self, k):
+        return super().__delitem__(k.casefold())
+
+    def __getitem__(self, k):
+        return super().__getitem__(k.casefold())
+
+    def get(self, k, default=None):
+        return super().get(k.casefold(), default)
+
+    def pop(self, k, default=None):
+        return super().pop(k.casefold(), default)
+
+    def __setitem__(self, k, v):
+        super().__setitem__(k.casefold(), v)
+
+
 def cached_slot_property(name: str) -> Callable[[Callable[[T], T_co]], CachedSlotProperty[T, T_co]]:
     def decorator(func: Callable[[T], T_co]) -> CachedSlotProperty[T, T_co]:
         return CachedSlotProperty(name, func)
