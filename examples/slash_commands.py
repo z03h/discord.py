@@ -21,7 +21,7 @@ class Math(ApplicationCommand, name='math'):
             answer = self.x + self.y
             await interaction.response.send_message(
                 f'The value of {self.x} + {self.y} is **{answer}**.',
-                ephermeral=True
+                ephemeral=True
             )
 
     class Subtract(ApplicationCommand, name='subtract'):
@@ -33,7 +33,7 @@ class Math(ApplicationCommand, name='math'):
             answer = self.x - self.y
             await interaction.response.send_message(
                 f'The value of {self.x} - {self.y} is **{answer}**.',
-                ephermeral=True
+                ephemeral=True
             )
 
 
