@@ -556,7 +556,7 @@ class ApplicationCommandStore:
         command: ApplicationCommandMeta,
         guild_id: int,
     ) -> ApplicationCommand:
-        options = data['options']
+        options = data.get('options', [])
         resolved = data.get('resolved', {})
         to_parse = []
 
