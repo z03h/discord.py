@@ -64,6 +64,12 @@ if TYPE_CHECKING:
         ApplicationCommandInteractionData,
     )
 
+    ApplicationCommandOptionChoiceT = Union[
+        Dict[str, Union[str, float]],
+        Sequence['ApplicationCommandOptionChoice'],
+        Sequence[Union[str, float]]
+    ]
+
     ApplicationCommandOptionTypeT = Union[
         ApplicationCommandType,
         Literal[
@@ -170,7 +176,7 @@ def option(
     description: str,
     required: bool = MISSING,
     optional: bool = MISSING,
-    choices: Union[Dict[str, Union[str, float]], Sequence[ApplicationCommandOptionChoice]] = MISSING,
+    choices: ApplicationCommandOptionChoiceT = MISSING,
 ) -> ApplicationCommandOption:
     """Creates an application command option which can be used on :class:`.ApplicationCommand`s.
 
@@ -229,7 +235,7 @@ def option(
 
     return ApplicationCommandOption(
         type=type,
-        name=name.casefold() if name else name,
+        name=name and name.casefold(),
         description=description,
         required=required,
         choices=choices,
