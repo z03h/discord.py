@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from .abc import GuildChannel, Messageable, Snowflake
 from .channel import TextChannel, _guild_channel_factory
 from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType
+from .errors import IncompatibleCommandSignature
 from .member import Member
 from .object import Object
 from .role import Role
@@ -46,6 +47,7 @@ from typing import (
     List,
     Literal,
     NamedTuple,
+    Set,
     Sequence,
     Tuple,
     Type,
@@ -62,6 +64,7 @@ if TYPE_CHECKING:
         ApplicationCommandOption as ApplicationCommandOptionPayload,
         ApplicationCommandOptionChoice as ApplicationCommandOptionChoicePayload,
         ApplicationCommandInteractionData,
+        ApplicationCommandInteractionDataOption,
     )
 
     ApplicationCommandOptionChoiceT = Union[
@@ -101,6 +104,16 @@ OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
     Object: ApplicationCommandOptionType.mentionable,
     Snowflake: ApplicationCommandOptionType.mentionable,
     float: ApplicationCommandOptionType.number,
+}
+
+RESERVED_ATTRIBUTE_NAMES: Final[Set[str]] = {
+    '__application_command_type__',
+    '__application_command_name__',
+    '__application_command_description__',
+    '__application_command_default_option__',
+    '__application_command_options__',
+    '__application_command_parent__',
+    '__application_command_children__',
 }
 
 __all__ = (
@@ -417,7 +430,7 @@ class ApplicationCommandMeta(type):
             parent.__application_command_children__[cls.__application_command_name__] = cls
 
         for name, value in attrs.items():
-            if isinstance(value, mcs):
+            if name not in RESERVED_ATTRIBUTE_NAMES and isinstance(value, mcs):
                 children[value.__application_command_name__] = value
                 value.__application_command_parent__ = cls
 
@@ -555,6 +568,27 @@ class ApplicationCommandStore:
             else:
                 self.state.dispatch('application_command_completion', interaction)
 
+    def _sanitize_command(
+        self,
+        *,
+        options: Sequence[ApplicationCommandInteractionDataOption],
+        command: ApplicationCommandMeta,
+    ) -> Tuple[ApplicationCommand, List[ApplicationCommandInteractionDataOption]]:
+        result = options
+
+        for option in options:
+            if option['type'] < 3:
+                command = command.__application_command_children__[option['name']]
+                result = option['options']
+
+                if option['type'] == 2:
+                    command = command.__application_command_children__[result[0]['name']]
+                    result = result[0]['options']
+
+                break
+
+        return command(), result
+
     def _parse_options(
         self,
         *,
@@ -564,28 +598,14 @@ class ApplicationCommandStore:
     ) -> ApplicationCommand:
         options = data.get('options', [])
         resolved = data.get('resolved', {})
-        to_parse = options
-
-        # In the first iteration, sanitize the command and options.
-        for option in options:
-            if option['type'] < 3:
-                command = command.__application_command_children__[option['name']]
-                to_parse = option['options']
-
-                if option['type'] == 2:
-                    command = command.__application_command_children__[to_parse[0]['name']]
-                    to_parse = to_parse[0]['options']
-
-                break
-
-        command = command()
+        command, options = self._sanitize_command(options=options, command=command)
 
         for key in command.__class__.__application_command_options__:
             setattr(command, key, None)  # For options that were not given
 
         maybe_guild = self.state._get_guild(guild_id)
 
-        for option in to_parse:
+        for option in options:
             value = option['value']
             type = option['type']
 
@@ -607,7 +627,7 @@ class ApplicationCommandStore:
                     value = User(data=user_data, state=self.state)
 
             elif type == 7:
-                # Prefer from cache
+                # Prefer from cache (Data is only partial)
                 cached = self.state.get_channel(int(value))
                 if cached is None:
                     channel_data = defaultdict(lambda: None)
@@ -640,7 +660,11 @@ class ApplicationCommandStore:
         except KeyError:
             return
 
-        command = self._parse_options(data=data, command=command_factory, guild_id=interaction.guild_id)
+        try:
+            command = self._parse_options(data=data, command=command_factory, guild_id=interaction.guild_id)
+        except (KeyError, IndexError):
+            raise IncompatibleCommandSignature(data=data, command=command_factory, interaction=interaction)
+
         self.state.loop.create_task(
             self.invoke(command, interaction), name=f'discord-application-commands-dispatch-{interaction.id}'
         )

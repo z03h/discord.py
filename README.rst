@@ -36,6 +36,8 @@ Therefore, there are some key differences between the DSL and what is in this fo
 Full list of additions
 ~~~~~~~~~~~~~~~~~~~~~~
 
+.. |x| replace:: *(Not implemented yet)*
+
 ``application_commands`` namespace
 **********************************
 
@@ -56,27 +58,34 @@ ConnectionState
 ***************
 
 - ``ConnectionState.add_application_command``
+- ``ConnectionState.get_application_command`` |x|
 - ``ConnectionState.update_application_commands``
 
 Client
 ******
 
-- ``Client.application_commands``
+- ``Client.application_commands`` |x|
 - ``Client.add_application_command``
 - ``Client.add_application_commands``
+- ``Client.get_application_command`` |x|
+- ``Client.fetch_application_command`` |x|
+- ``Client.fetch_application_commands`` |x|
 - ``Client.update_application_commands``
-- ``Client.create_application_command``
-- ``Client.bulk_create_application_commands``
+- ``Client.create_application_command`` |x|
+- ``Client.bulk_create_application_commands`` |x|
 
 Guild
 *****
 
-- ``Guild.application_commands``
-- ``Guild.add_application_command``
-- ``Guild.add_application_commands``
-- ``Guild.update_application_commands``
-- ``Guild.create_application_command``
-- ``Guild.bulk_create_application_commands``
+- ``Guild.application_commands`` |x|
+- ``Guild.add_application_command`` |x|
+- ``Guild.add_application_commands`` |x|
+- ``Guild.get_application_command`` |x|
+- ``Guild.fetch_application_command`` |x|
+- ``Guild.fetch_application_commands`` |x|
+- ``Guild.update_application_commands`` |x|
+- ``Guild.create_application_command`` |x|
+- ``Guild.bulk_create_application_commands`` |x|
 
 Events
 ******
@@ -84,6 +93,11 @@ Events
 - ``on_application_command(interaction)``
 - ``on_application_command_completion(interaction)``
 - ``on_application_command_error(interaction, error)``
+
+Exceptions
+**********
+
+- ``IncompatibleCommandSignature``
 
 Notes
 ~~~~~
@@ -169,6 +183,23 @@ Quick Example
     client = MyClient()
     client.run('token')
 
+Application Command Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code:: py
+
+    import discord
+    from discord.application_commands import ApplicationCommand, option
+
+    class HelloWorld(ApplicationCommand, name='hello-world'):
+        """Hello""
+        async def callback(self, interaction):
+            await interaction.response.send_message('Hello, world!')
+
+    client = discord.Client()
+    client.add_application_command(HelloWorld)
+    client.run('token')
+
 Bot Example
 ~~~~~~~~~~~~~
 
@@ -183,7 +214,7 @@ Bot Example
     async def ping(ctx):
         await ctx.send('pong')
 
-bot.run('token')
+    bot.run('token')
 
 You can find more examples in the examples directory.
 

@@ -35,7 +35,9 @@ if TYPE_CHECKING:
     except ModuleNotFoundError:
         _ResponseType = ClientResponse
 
+    from .application_commands import ApplicationCommandMeta
     from .interactions import Interaction
+    from .types.interactions import ApplicationCommandInteractionData
 
 __all__ = (
     'DiscordException',
@@ -52,6 +54,7 @@ __all__ = (
     'ConnectionClosed',
     'PrivilegedIntentsRequired',
     'InteractionResponded',
+    'IncompatibleCommandSignature',
 )
 
 
@@ -77,6 +80,37 @@ class NoMoreItems(DiscordException):
     """Exception that is raised when an async iteration operation has no more items."""
 
     pass
+
+
+class IncompatibleCommandSignature(DiscordException):
+    """Exception that is raised when the signature of an application command received from Discord
+    is incompatible with the stored one.
+
+    Attributes
+    ----------
+    interaction: :class:`.Interaction`
+        The interaction that invoked the command.
+    data: Dict[str, Any]
+        The raw, incompatible interaction data retrieved from Discord.
+    command: Type[:class:`.application_commands.ApplicationCommand`]
+        The incompatible application command.
+    """
+
+    def __init__(
+        self,
+        *,
+        interaction: Interaction,
+        data: ApplicationCommandInteractionData,
+        command: ApplicationCommandMeta,
+    ) -> None:
+        self.interaction: Interaction = interaction
+        self.data: ApplicationCommandInteractionData = data
+        self.command: ApplicationCommandMeta = command
+
+        message = f'Signature of application command {command.__application_command_name__!r} ' \
+                  f'(ID: {data["id"]}) received from Discord is imcompatible with the stored signature.'
+
+        super().__init__(message)
 
 
 class GatewayNotFound(DiscordException):
