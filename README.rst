@@ -45,6 +45,7 @@ Full list of additions
 - ``application_commands.ApplicationCommandMeta``
 - ``application_commands.ApplicationCommandOption``
 - ``application_commands.ApplicationCommandOptionChoice``
+- ``application_commands.ApplicationCommandPool``
 - ``application_commands.option``
 
 ``interactions`` namespace
@@ -197,7 +198,6 @@ Application Command Example
             await interaction.response.send_message('Hello, world!')
 
     client = discord.Client()
-    client.add_application_command(HelloWorld)
     client.run('token')
 
 Bot Example
