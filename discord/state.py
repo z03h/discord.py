@@ -61,7 +61,7 @@ from .sticker import GuildSticker
 
 if TYPE_CHECKING:
     from .abc import PrivateChannel
-    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand
+    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand, ApplicationCommandPool
     from .message import MessageableChannel
     from .guild import GuildChannel, VocalGuildChannel
     from .http import HTTPClient
@@ -139,6 +139,11 @@ async def logging_coroutine(coroutine: Coroutine[Any, Any, T], *, info: str) -> 
         await coroutine
     except Exception:
         _log.exception('Exception occurred during %s', info)
+
+
+def _get_default_command_pool():
+    from .application_commands import DefaultApplicationCommandPool
+    return DefaultApplicationCommandPool
 
 
 class ConnectionState:
@@ -222,8 +227,15 @@ class ConnectionState:
         self._status: Optional[str] = status
         self._intents: Intents = intents
 
+        self._application_command_pool: ApplicationCommandPool = (
+            # Odd solution to avoid circular imports
+            options.get('application_command_pool') or _get_default_command_pool()
+        )
         self._queued_global_application_commands: Dict[str, NativeApplicationCommand] = {}
         self._queued_guild_application_commands: Dict[int, Dict[str, NativeApplicationCommand]] = defaultdict(dict)
+
+        self._application_command_pool._add_state(self)
+        self._queue_existing_application_commands()
 
         self.cached_application_commands: Dict[int, ApplicationCommand] = {}
 
@@ -514,10 +526,18 @@ class ConnectionState:
             _log.warning('Timed out waiting for chunks with query %r and limit %d for guild_id %d', query, limit, guild_id)
             raise
 
+    def _queue_existing_application_commands(self) -> None:
+        for key, command in self._application_command_pool.commands.items():
+            if guild_id := command.__application_command_guild_id__:
+                self._queued_guild_application_commands[guild_id][key] = command
+            else:
+                self._queued_global_application_commands[key] = command
+
     async def update_global_application_commands(self) -> None:
         payload = [
             command.to_dict()
             for command in self._queued_global_application_commands.values()
+            if not command.__application_command_parent__
         ]
         response = await self.http.bulk_upsert_global_commands(self.self_id or self.application_id, payload)
 
@@ -531,10 +551,7 @@ class ConnectionState:
     async def update_guild_application_commands(self, guild_id: int) -> None:
         queue = self._queued_guild_application_commands[guild_id]
 
-        payload = [
-            command.to_dict()
-            for command in queue.values()
-        ]
+        payload = [command.to_dict() for command in queue.values() if not command.__application_command_parent__]
         response = await self.http.bulk_upsert_guild_commands(self.self_id or self.application_id, guild_id, payload)
 
         for data in response:

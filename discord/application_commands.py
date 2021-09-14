@@ -44,9 +44,11 @@ from typing import (
     Any,
     Dict,
     Final,
+    Iterable,
     List,
     Literal,
     NamedTuple,
+    Optional,
     Set,
     Sequence,
     Tuple,
@@ -114,6 +116,7 @@ RESERVED_ATTRIBUTE_NAMES: Final[Set[str]] = {
     '__application_command_options__',
     '__application_command_parent__',
     '__application_command_children__',
+    '__application_command_guild_id__',
 }
 
 __all__ = (
@@ -121,8 +124,59 @@ __all__ = (
     'ApplicationCommandMeta',
     'ApplicationCommandOption',
     'ApplicationCommandOptionChoice',
+    'ApplicationCommandPool',
+    'DefaultApplicationCommandPool',
     'option',
 )
+
+
+class ApplicationCommandPool:
+    """Represents a pool of application commands that will be automatically added on startup.
+    Only in rare instances should you make and/or construct these yourself.
+
+    Attributes
+    ----------
+    commands: List[Type[:class:`.ApplicationCommand`]]
+        A mapping of command names to commands for all commands contained in this pool.
+    """
+
+    def __init__(self) -> None:
+        self.commands: Dict[str, ApplicationCommandMeta] = {}
+        self._states: Set[ConnectionState] = set()
+
+    def __iter__(self) -> Iterable[Tuple[str, ApplicationCommandMeta]]:
+        return iter(self.commands.items())
+
+    def _add_command(self, command: ApplicationCommandMeta) -> None:
+        key = command.__application_command_name__
+        self.commands[key] = command
+
+        for state in self._states:
+            if guild_id := command.__application_command_guild_id__:
+                self._queued_guild_application_commands[guild_id][key] = command
+            else:
+                self._queued_global_application_commands[key] = command
+
+    def _add_state(self, state: ConnectionState) -> None:
+        self._states.add(state)
+
+    def get_command_named(self, name: str, /) -> Optional[ApplicationCommandMeta]:
+        """Gets an application command contained in this pool by it's name. Case-sensitive.
+
+        Parameters
+        ----------
+        name: str
+            The name of the application command.
+
+        Returns
+        -------
+        Optional[Type[:class:`.ApplicationCommand`]]
+            The application command with the given name, or ``None`` if it was not found.
+        """
+        return self.commands.get(name)
+
+
+DefaultApplicationCommandPool = ApplicationCommandPool()
 
 
 class ApplicationCommandOptionChoice(NamedTuple):
@@ -373,6 +427,12 @@ class ApplicationCommandMeta(type):
         Defaults to ``True``
     option_kwargs: Dict[str, Any]:
         Default kwargs to pass in for each option.
+    guild_id: int
+        The ID of the guild that this command will automatically be added to.
+        Leave blank to make this a global command.
+    pool: Optional[:class:`.ApplicationCommandPool`]
+        The pool this command will be added to. Defaults to the ``DefaultApplicationCommandPool``.
+        Explicitly setting this to ``None`` will add it to no pools. (You will have to add the command yourself)
     """
 
     if TYPE_CHECKING:
@@ -383,6 +443,7 @@ class ApplicationCommandMeta(type):
         __application_command_options__: Dict[str, ApplicationCommandOption]
         __application_command_parent__: ApplicationCommandMeta
         __application_command_children__: Dict[str, ApplicationCommand]
+        __application_command_guild_id__: int
 
     def __new__(
         mcs: Type[ApplicationCommandMeta],
@@ -396,6 +457,8 @@ class ApplicationCommandMeta(type):
         parent: ApplicationCommandMeta = MISSING,
         default_permission: bool = True,
         option_kwargs: Dict[str, Any] = MISSING,
+        guild_id: int = MISSING,
+        pool: ApplicationCommandPool = DefaultApplicationCommandPool,
         **kwargs,
     ) -> ApplicationCommandMeta:
         if not isinstance(type, ApplicationCommandType):
@@ -419,6 +482,7 @@ class ApplicationCommandMeta(type):
             __application_command_description__=description,
             __application_command_parent__=parent,
             __application_command_default_permission__=default_permission,
+            __application_command_guild_id__=guild_id,
         )
 
         attrs['__application_command_options__'] = _get_application_command_options(attrs, option_kwargs=option_kwargs)
@@ -433,6 +497,9 @@ class ApplicationCommandMeta(type):
             if name not in RESERVED_ATTRIBUTE_NAMES and isinstance(value, mcs):
                 children[value.__application_command_name__] = value
                 value.__application_command_parent__ = cls
+
+        if pool is not None:
+            pool._add_command(cls)
 
         return cls
 
@@ -481,7 +548,7 @@ class ApplicationCommandMeta(type):
         return payload
 
 
-class ApplicationCommand(metaclass=ApplicationCommandMeta):
+class ApplicationCommand(metaclass=ApplicationCommandMeta, pool=None):
     """Represents an application command."""
 
     async def command_check(self, interaction: Interaction) -> bool:

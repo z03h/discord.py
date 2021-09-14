@@ -199,6 +199,11 @@ class Client:
         Defaults to ``True``.
 
         .. versionadded:: 2.0
+    application_command_pool: :class:`.application_commands.ApplicationCommandPool`
+        The application command pool to use to update commands. This should rarely be used.
+        Defaults to the ``DefaultApplicationCommandPool``.
+
+        .. versionadded:: 2.0
 
     Attributes
     -----------
@@ -1608,7 +1613,7 @@ class Client:
         return state.add_dm_channel(data)
 
     # The "guild_ids" parameter was removed in order to discourage API abuse (Each guild would mean another API call)
-    def add_application_command(self, command: NativeApplicationCommand, *, guild_id: int = None) -> None:
+    def add_application_command(self, command: NativeApplicationCommand, *, guild_id: int = MISSING) -> None:
         """Queues an application command to be eventually added.
 
         To directly add a command, see :meth:`.Client.create_application_command`
@@ -1620,15 +1625,18 @@ class Client:
             The application command to queue.
         guild_id: int
             The ID of the guild that this command should be added to.
-            Leave blank to make this global.
+            Defaults to the guild ID of set in the command class declaration.
         """
+        if guild_id is MISSING:
+            guild_id = command.__application_command_guild_id__
+
         if not guild_id:
             self._connection._queued_global_application_commands[command.__application_command_name__] = command
             return
 
         self._connection._queued_guild_application_commands[guild_id][command.__application_command_name__] = command
 
-    def add_application_commands(self, *commands: NativeApplicationCommand, guild_id: int = None) -> None:
+    def add_application_commands(self, *commands: NativeApplicationCommand, guild_id: int = MISSING) -> None:
         """Queues multiple application commands at once to be eventually added.
 
         The directly add commands, see :meth:`.Client.bulk_create_application_commands`.
@@ -1639,7 +1647,7 @@ class Client:
             A list of commands to queue.
         guild_id: int
             The ID of the guild that these commands should be added to.
-            Leave blank to make them global.
+            Defaults to the guild ID of set in the command class declaration.
         """
         for command in commands:
             self.add_application_command(command, guild_id=guild_id)
