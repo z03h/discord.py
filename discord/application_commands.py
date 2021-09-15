@@ -213,6 +213,7 @@ class ApplicationCommandOption:
     description: str
     required: bool = False
     choices: List[ApplicationCommandOptionChoice] = MISSING
+    default: Any = MISSING
 
     def _update(self, **kwargs: Any) -> None:
         for k, v in kwargs.items():
@@ -244,6 +245,7 @@ def option(
     required: bool = MISSING,
     optional: bool = MISSING,
     choices: ApplicationCommandOptionChoiceT = MISSING,
+    default: Any = None,
 ) -> ApplicationCommandOption:
     """Creates an application command option which can be used on :class:`.ApplicationCommand`s.
 
@@ -266,6 +268,9 @@ def option(
 
         Argument should either be a mapping of choice names and their return values,
         A sequence of the possible choices, or a sequence of :class:`.ApplicationCommandOptionChoice`.
+    default
+        The default value passed to the attribute if the option is not passed.
+        Defaults to ``None``.
 
     Returns
     -------
@@ -306,6 +311,7 @@ def option(
         description=description,
         required=required,
         choices=choices,
+        default=default,
     )
 
 
@@ -667,8 +673,8 @@ class ApplicationCommandStore:
         resolved = data.get('resolved', {})
         command, options = self._sanitize_command(options=options, command=command)
 
-        for key in command.__class__.__application_command_options__:
-            setattr(command, key, None)  # For options that were not given
+        for name, option in command.__class__.__application_command_options__.items():
+            setattr(command, key, option.default)  # For options that were not given
 
         maybe_guild = self.state._get_guild(guild_id)
 

@@ -100,6 +100,15 @@ Exceptions
 
 - ``IncompatibleCommandSignature``
 
+Roadmap
+~~~~~~~
+
+.. |0| replace:: incomplete
+.. |1| replace:: partial
+.. |2| replace:: complete
+
+Application Commands: |1|
+
 Notes
 ~~~~~
 
