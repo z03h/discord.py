@@ -202,7 +202,7 @@ Application Command Example
     from discord.application_commands import ApplicationCommand, option
 
     class HelloWorld(ApplicationCommand, name='hello-world'):
-        """Hello""
+        """Hello"""
         async def callback(self, interaction):
             await interaction.response.send_message('Hello, world!')
 
