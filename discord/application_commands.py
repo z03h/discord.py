@@ -35,10 +35,11 @@ from .channel import TextChannel, _guild_channel_factory
 from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType
 from .errors import IncompatibleCommandSignature
 from .member import Member
+from .message import Message
 from .object import Object
 from .role import Role
 from .user import User
-from .utils import MISSING, resolve_annotation
+from .utils import find, MISSING, resolve_annotation
 
 from typing import (
     Any,
@@ -58,6 +59,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
+    from .guild import Guild
     from .interactions import Interaction
     from .state import ConnectionState
 
@@ -108,7 +110,7 @@ OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
     float: ApplicationCommandOptionType.number,
 }
 
-RESERVED_ATTRIBUTE_NAMES: Final[Set[str]] = {
+RESERVED_ATTRIBUTE_NAMES: Final[Tuple[str, ...]] = (
     '__application_command_type__',
     '__application_command_name__',
     '__application_command_description__',
@@ -117,66 +119,107 @@ RESERVED_ATTRIBUTE_NAMES: Final[Set[str]] = {
     '__application_command_parent__',
     '__application_command_children__',
     '__application_command_guild_id__',
-}
+    '__application_command_tree__',
+)
 
 __all__ = (
     'ApplicationCommand',
     'ApplicationCommandMeta',
     'ApplicationCommandOption',
     'ApplicationCommandOptionChoice',
-    'ApplicationCommandPool',
-    'DefaultApplicationCommandPool',
+    'ApplicationCommandTree',
+    'SlashCommand',
+    'MessageCommand',
+    'UserCommand',
     'option',
 )
 
 
-class ApplicationCommandPool:
-    """Represents a pool of application commands that will be automatically added on startup.
-    Only in rare instances should you make and/or construct these yourself.
+class ApplicationCommandTree:
+    """Represents a category of application commands.
 
-    Attributes
+    Parameters
     ----------
-    commands: List[Type[:class:`.ApplicationCommand`]]
-        A mapping of command names to commands for all commands contained in this pool.
+    name: str
+        The name of this tree. Defaults to ``None``.
     """
 
-    def __init__(self) -> None:
-        self.commands: Dict[str, ApplicationCommandMeta] = {}
-        self._states: Set[ConnectionState] = set()
+    def __init__(self, name: str = None, *, guild_id: int = MISSING) -> None:
+        self.name: Optional[str] = name
+        self._guild_id: int = guild_id
 
-    def __iter__(self) -> Iterable[Tuple[str, ApplicationCommandMeta]]:
-        return iter(self.commands.items())
+        self._global_commands: Set[ApplicationCommandMeta] = set()
+        self._guild_commands: Dict[int, Set[ApplicationCommandMeta]] = defaultdict(set)
 
-    def _add_command(self, command: ApplicationCommandMeta) -> None:
-        key = command.__application_command_name__
-        self.commands[key] = command
+    @property
+    def commands(self) -> List[ApplicationCommandMeta]:
+        """List[Type[:class:`.ApplicationCommand`]]: A list of all application commands this tree holds.
 
-        for state in self._states:
-            if guild_id := command.__application_command_guild_id__:
-                self._queued_guild_application_commands[guild_id][key] = command
-            else:
-                self._queued_global_application_commands[key] = command
+        .. note::
+            There may be duplicate commands in the returned list if a command is present
+            in multiple guilds.
 
-    def _add_state(self, state: ConnectionState) -> None:
-        self._states.add(state)
+        .. versionadded:: 2.0
+        """
+        result = [command for v in self._guild_commands.values() for command in v]
+        result.extend(self._global_commands)
+        return result
 
-    def get_command_named(self, name: str, /) -> Optional[ApplicationCommandMeta]:
-        """Gets an application command contained in this pool by it's name. Case-sensitive.
+    @property
+    def global_commands(self) -> List[ApplicationCommandMeta]:
+        """List[Type[:class:`.ApplicationCommand`]]: A list of all global application commands this tree holds.
+
+        .. versionadded:: 2.0
+        """
+        return list(self._global_commands)
+
+    def guild_commands_for(self, guild_id: int, /) -> None:
+        """Returns a list of all application commands this tree holds that are in the given guild.
 
         Parameters
         ----------
-        name: str
-            The name of the application command.
+        guild_id: int
+            The ID of the guild.
 
         Returns
         -------
-        Optional[Type[:class:`.ApplicationCommand`]]
-            The application command with the given name, or ``None`` if it was not found.
+        List[Type[:class:`.ApplicationCommand`]]
         """
-        return self.commands.get(name)
+        return list(self._guild_commands[guild_id])
 
+    def add_command(self, command: ApplicationCommandMeta, *, guild_id: int = MISSING) -> None:
+        """Adds a command to this tree.
 
-DefaultApplicationCommandPool = ApplicationCommandPool()
+        Parameters
+        ----------
+        command: Type[:class:`.ApplicationCommand`]
+            The command to add.
+        guild_id: int
+            The ID of the guild that this command will be in.
+            Leave as ``None`` to make this command global.
+        """
+        guild_id = guild_id or command.__application_command_guild_id__ or self._guild_id
+
+        if not guild_id:
+            self._global_commands.add(command)
+        else:
+            self._guild_commands[guild_id].add(command)
+
+        command.__application_command_tree__ = self
+
+    def add_commands(self, *commands: ApplicationCommandMeta, guild_id: int = MISSING) -> None:
+        """Adds multiple commands to this tree at once.
+
+        Parameters
+        ----------
+        *commands: Type[:class:`.ApplicationCommand`]
+            The commands to add.
+        guild_id: int
+            The ID of the guild that these commands will be in.
+            Leave as ``None`` to make these commands global.
+        """
+        for command in commands:
+            self.add_command(command, guild_id=guild_id)
 
 
 class ApplicationCommandOptionChoice(NamedTuple):
@@ -436,9 +479,8 @@ class ApplicationCommandMeta(type):
     guild_id: int
         The ID of the guild that this command will automatically be added to.
         Leave blank to make this a global command.
-    pool: Optional[:class:`.ApplicationCommandPool`]
-        The pool this command will be added to. Defaults to the ``DefaultApplicationCommandPool``.
-        Explicitly setting this to ``None`` will add it to no pools. (You will have to add the command yourself)
+    tree: :class:`.ApplicationCommandTree`
+        The command tree this command will be added to.
     """
 
     if TYPE_CHECKING:
@@ -450,6 +492,7 @@ class ApplicationCommandMeta(type):
         __application_command_parent__: ApplicationCommandMeta
         __application_command_children__: Dict[str, ApplicationCommand]
         __application_command_guild_id__: int
+        __application_command_tree__: ApplicationCommandTree
 
     def __new__(
         mcs: Type[ApplicationCommandMeta],
@@ -457,16 +500,27 @@ class ApplicationCommandMeta(type):
         bases: Tuple[type, ...],
         attrs: Dict[str, Any],
         *,
-        type: ApplicationCommandType = ApplicationCommandType.chat_input,
+        type: ApplicationCommandType = MISSING,
         name: str = MISSING,
         description: str = MISSING,
         parent: ApplicationCommandMeta = MISSING,
         default_permission: bool = True,
         option_kwargs: Dict[str, Any] = MISSING,
         guild_id: int = MISSING,
-        pool: ApplicationCommandPool = DefaultApplicationCommandPool,
+        tree: ApplicationCommandTree = MISSING,
         **kwargs,
     ) -> ApplicationCommandMeta:
+        if type is MISSING:
+            try:
+                base = bases[0]
+            except IndexError:
+                base = None
+
+            if isinstance(base, mcs):
+                type = base.__application_command_type__
+            else:
+                type = ApplicationCommandType.chat_input
+
         if not isinstance(type, ApplicationCommandType):
             raise TypeError('application command types must be an ApplicationCommandType.')
 
@@ -482,9 +536,12 @@ class ApplicationCommandMeta(type):
             except KeyError:
                 raise TypeError('application commands must have a description.')
 
+        if type is ApplicationCommandType.chat_input:
+            name = name.casefold()
+
         attrs.update(
             __application_command_type__=type,
-            __application_command_name__=name.casefold(),
+            __application_command_name__=name,
             __application_command_description__=description,
             __application_command_parent__=parent,
             __application_command_default_permission__=default_permission,
@@ -504,8 +561,8 @@ class ApplicationCommandMeta(type):
                 children[value.__application_command_name__] = value
                 value.__application_command_parent__ = cls
 
-        if pool is not None:
-            pool._add_command(cls)
+        if tree is not MISSING:
+            tree.add_command(cls)
 
         return cls
 
@@ -554,7 +611,7 @@ class ApplicationCommandMeta(type):
         return payload
 
 
-class ApplicationCommand(metaclass=ApplicationCommandMeta, pool=None):
+class ApplicationCommand(metaclass=ApplicationCommandMeta):
     """Represents an application command."""
 
     async def command_check(self, interaction: Interaction) -> bool:
@@ -618,7 +675,7 @@ class ApplicationCommandStore:
         self,
         command: ApplicationCommand,
         interaction: discord.Interaction,
-        error: Exception
+        error: Exception,
     ) -> None:
         try:
             await command.command_error(interaction, error)
@@ -662,42 +719,88 @@ class ApplicationCommandStore:
 
         return command(), result
 
+    def _resolve_user(
+        self,
+        *,
+        resolved: Dict[str, Dict[str, Dict[str, Any]]],
+        guild: Optional[Guild],
+        user_id: str,
+    ) -> Union[User, Member]:
+        user_data = member_data = None
+
+        if user_id in resolved['users']:
+            user_data = resolved['users'][user_id]
+
+        if user_id in resolved['members']:
+            member_data = resolved['members'][user_id]
+
+        if user_data and member_data:
+            member_data['user'] = user_data
+
+        if member_data is not None and guild:
+            return Member(data=member_data, state=self.state, guild=guild)
+
+        return User(data=user_data, state=self.state)
+
+    def _parse_context_menu(
+        self,
+        *,
+        data: ApplicationCommandInteractionData,
+        resolved: Dict[str, Dict[str, Dict[str, Any]]],
+        interaction: Interaction,
+        guild: Guild,
+    ) -> None:
+        target_id = data['target_id']
+
+        if data['type'] == 2:
+            interaction.target = self._resolve_user(
+                resolved=resolved,
+                guild=guild,
+                user_id=target_id,
+            )
+            return
+
+        data = resolved['messages'][target_id]
+        data['guild_id'] = interaction.guild_id
+        channel, _ = self.state._get_guild_channel(data)
+
+        interaction.target = Message(
+            data=data,
+            channel=channel,
+            state=self.state,
+        )
+
     def _parse_options(
         self,
         *,
         data: ApplicationCommandInteractionData,
         command: ApplicationCommandMeta,
-        guild_id: int,
+        interaction: Interaction,
     ) -> ApplicationCommand:
         options = data.get('options', [])
         resolved = data.get('resolved', {})
         command, options = self._sanitize_command(options=options, command=command)
+        maybe_guild = self.state._get_guild(interaction.guild_id)
+
+        if data['type'] > 1:
+            # Not a slash command
+            self._parse_context_menu(
+                data=data,
+                resolved=resolved,
+                guild=maybe_guild,
+                interaction=interaction,
+            )
+            return command
 
         for name, option in command.__class__.__application_command_options__.items():
-            setattr(command, key, option.default)  # For options that were not given
-
-        maybe_guild = self.state._get_guild(guild_id)
+            setattr(command, name, option.default)  # For options that were not given
 
         for option in options:
             value = option['value']
             type = option['type']
 
             if type == 6:
-                user_data = member_data = None
-
-                if value in resolved['users']:
-                    user_data = resolved['users'][value]
-
-                if value in resolved['members']:
-                    member_data = resolved['members'][value]
-
-                if user_data and member_data:
-                    member_data['user'] = user_data
-
-                if member_data is not None and maybe_guild:
-                    value = Member(data=member_data, state=self.state, guild=maybe_guild)
-                else:
-                    value = User(data=user_data, state=self.state)
+                value = self._resolve_user(resolved=resolved, guild=maybe_guild, user_id=value)
 
             elif type == 7:
                 # Prefer from cache (Data is only partial)
@@ -727,17 +830,32 @@ class ApplicationCommandStore:
 
         return command
 
-    def dispatch(self, data: ApplicationCommandInteractionData, interaction: discord.Interaction) -> None:
+    def dispatch(self, data: ApplicationCommandInteractionData, interaction: Interaction) -> None:
         try:
             command_factory = self.commands[int(data['id'])]
         except KeyError:
             return
 
+        kwargs = {'data': data, 'command': command_factory, 'interaction': interaction}
         try:
-            command = self._parse_options(data=data, command=command_factory, guild_id=interaction.guild_id)
+            command = self._parse_options(**kwargs)
         except (KeyError, IndexError):
-            raise IncompatibleCommandSignature(data=data, command=command_factory, interaction=interaction)
+            raise IncompatibleCommandSignature(**kwargs)
 
         self.state.loop.create_task(
             self.invoke(command, interaction), name=f'discord-application-commands-dispatch-{interaction.id}'
         )
+
+
+# shortcuts
+
+class SlashCommand(ApplicationCommand, type=ApplicationCommandType.chat_input):
+    """A shortcut for doing ``class Command(ApplicationCommand, type=ApplicationCommandType.chat_input)``."""
+
+
+class MessageCommand(ApplicationCommand, type=ApplicationCommandType.message):
+    """A shortcut for doing ``class Command(ApplicationCommand, type=ApplicationCommandType.message)``."""
+
+
+class UserCommand(ApplicationCommand, type=ApplicationCommandType.user):
+    """A shortcut for doing ``class Command(ApplicationCommand, type=ApplicationCommandType.user)``."""

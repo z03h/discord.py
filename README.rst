@@ -199,14 +199,17 @@ Application Command Example
 .. code:: py
 
     import discord
-    from discord.application_commands import ApplicationCommand, option
+    from discord.application_commands import ApplicationCommand, ApplicationCommandTree, option
 
-    class HelloWorld(ApplicationCommand, name='hello-world'):
+    tree = ApplicationCommandTree(guild_id=123456)
+
+    class HelloWorld(ApplicationCommand, name='hello-world', tree=tree):
         """Hello"""
         async def callback(self, interaction):
             await interaction.response.send_message('Hello, world!')
 
-    client = discord.Client()
+    client = discord.Client(update_application_commands_at_startup=True)
+    client.add_application_command_tree(tree)
     client.run('token')
 
 Bot Example

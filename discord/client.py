@@ -63,7 +63,7 @@ from .threads import Thread
 from .sticker import GuildSticker, StandardSticker, StickerPack, _sticker_factory
 
 if TYPE_CHECKING:
-    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand
+    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand, ApplicationCommandTree
     from .abc import SnowflakeTime, PrivateChannel, GuildChannel, Snowflake
     from .channel import DMChannel
     from .message import Message
@@ -196,12 +196,7 @@ class Client:
         .. versionadded:: 2.0
     update_application_commands_at_startup: :class:`bool`
         Whether or not to automatically call :meth:`.Client.update_application_commands` at startup.
-        Defaults to ``True``.
-
-        .. versionadded:: 2.0
-    application_command_pool: :class:`.application_commands.ApplicationCommandPool`
-        The application command pool to use to update commands. This should rarely be used.
-        Defaults to the ``DefaultApplicationCommandPool``.
+        Defaults to ``False``.
 
         .. versionadded:: 2.0
 
@@ -240,7 +235,7 @@ class Client:
         }
 
         self._enable_debug_events: bool = options.pop('enable_debug_events', False)
-        self._update_commands_at_startup: bool = options.pop('update_application_commands_at_startup', True)
+        self._update_commands_at_startup: bool = options.pop('update_application_commands_at_startup', False)
 
         self._connection: ConnectionState = self._get_state(**options)
         self._connection.shard_count = self.shard_count
@@ -1651,6 +1646,35 @@ class Client:
         """
         for command in commands:
             self.add_application_command(command, guild_id=guild_id)
+
+    def add_application_command_tree(self, tree: ApplicationCommandTree) -> None:
+        """Adds and enqueues all commands held in an application command tree.
+
+        Parameters
+        ----------
+        tree: :class:`.application_commands.ApplicationCommandTree`
+            The command tree to add.
+        """
+        self._connection._queued_global_application_commands.update({
+            command.__application_command_name__: command for command in tree._global_commands
+        })
+
+        for guild_id, commands in tree._guild_commands.items():
+            self._connection._queued_guild_application_commands[guild_id].update({
+                command.__application_command_name__: command for command in commands
+            })
+
+    def store_application_command(self, id: int, command: NativeApplicationCommand) -> None:
+        """Stores and starts listening to an application command. This does not enqueue the command.
+
+        Parameters
+        ----------
+        id: int
+            The ID of the command to listen for.
+        command: Type[:class:`.application_commands.ApplicationCommand`]
+            The command callback class that should be used when the command is invoked.
+        """
+        self._connection._application_commands_store.store_command(id, command)
 
     async def update_application_commands(self) -> None:
         """|coro|

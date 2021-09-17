@@ -153,6 +153,63 @@ class ApplicationCommandOption(NamedTuple):
         return cls(*args)
 
 
+class PartialApplicationCommand:
+    """Represents an application command with minimal data.
+    This is typically retrieved through :attr:`Interaction.command`.
+
+    Attributes
+    ----------
+    type: :class:`ApplicationCommandType`
+        The type of this command.
+    name: str
+        The name of this command.
+    id: int
+        The ID of this command.
+    application_id: int
+        The ID of the application that this command belongs to.
+    """
+
+    __slots__ = (
+        '_state',
+        'type',
+        'name',
+        'id',
+        'application_id',
+    )
+
+    def __init__(
+        self,
+        *,
+        state: ConnectionState,
+        type: ApplicationCommandType,
+        name: str,
+        id: int,
+        application_id: int,
+    ) -> None:
+        self._state: ConnectionState = state
+        self.type: ApplicationCommandType = type
+        self.name: str = name
+        self.id: int = id
+        self.application_id: int = application_id
+
+    def __repr__(self) -> str:
+        return f'<PartialApplicationCommand type={self.type.name!r} name={self.name!r} id={self.id}>'
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, (PartialApplicationCommand, ApplicationCommand)) and self.id == other.id
+
+    def __hash__(self) -> int:
+        return self.id >> 22
+
+    @property
+    def resolved(self) -> Optional[ApplicationCommand]:
+        """Optional[:class:`ApplicationCommand`]: The resolved application command.
+
+        This gets the command from the internal cache - if it is not stored there, this will be ``None``.
+        """
+        return self._state.cached_application_commands.get(self.id)
+
+
 class ApplicationCommand(Hashable):
     """Represents an application command.
 
@@ -173,10 +230,6 @@ class ApplicationCommand(Hashable):
 
             Returns the command's hash.
 
-        .. describe:: str(x)
-
-            Returns the name of this command.
-
     Attributes
     ----------
     type: :class:`.ApplicationCommandType`
@@ -191,7 +244,7 @@ class ApplicationCommand(Hashable):
     guild_id: Optional[int]
         The ID of the guild this belongs to.
         If this is a global command, this will be ``None``.
-    application_id: str
+    application_id: int
         The ID of the application that this command belongs to.
     options: Optional[List[:class:`.ApplicationCommandOption`]
         A list of parameters that this command takes.
@@ -229,9 +282,6 @@ class ApplicationCommand(Hashable):
     def __init__(self, *, data: ApplicationCommandPayload, state: ConnectionState) -> None:
         self._state: ConnectionState = state
         self._from_data(data)
-
-    def __str__(self) -> str:
-        return self.name
 
     def __repr__(self) -> str:
         guild_id = f' guild_id={self.guild_id}' if self.guild_id else ''
@@ -373,7 +423,7 @@ class Interaction:
     """Represents a Discord interaction.
 
     An interaction happens when a user does an action that needs to
-    be notified. Current examples are slash commands and components.
+    be notified. Current examples are application commands and components.
 
     .. versionadded:: 2.0
 
@@ -387,16 +437,25 @@ class Interaction:
         The guild ID the interaction was sent from.
     channel_id: Optional[:class:`int`]
         The channel ID the interaction was sent from.
+    target_id: Optional[:class:`int`]
+        For context menus, the ID of the target user or message.
     application_id: :class:`int`
         The application ID that the interaction was for.
     user: Optional[Union[:class:`User`, :class:`Member`]]
         The user or member that sent the interaction.
     message: Optional[:class:`Message`]
         The message that sent this interaction.
+    target: Optional[Union[:class:`User`, :class:`Member`, :class:`Message`]]
+        The resolved target user or message.
+        This attribute is only resolved during application command option parsing.
+    command: Optional[:class:`PartialApplicationCommand`]
+        A partial representation of the command this interaction invoked.
+        Use :attr:`PartialApplicationCommand.resolved` to try retrieving it from cache.
+        Only applicable for application command interactions.
     token: :class:`str`
         The token to continue the interaction. These are valid
         for 15 minutes.
-    data: :class:`dict`
+    data: Dict[str, Any]
         The raw interaction data.
     """
 
@@ -407,8 +466,11 @@ class Interaction:
         'channel_id',
         'data',
         'application_id',
+        'target_id',
         'message',
         'user',
+        'target',
+        'command',
         'token',
         'version',
         '_permissions',
@@ -460,6 +522,23 @@ class Interaction:
                 self.user = User(state=self._state, data=data['user'])
             except KeyError:
                 pass
+
+        # application command data
+        self.target_id: int = utils._get_as_snowflake(self.data, 'target_id')
+        self.target: Optional[Union[User, Member, Message]] = None
+
+        self.command: Optional[PartialApplicationCommand]
+
+        if self.type is InteractionType.application_command:
+            self.command = PartialApplicationCommand(
+                state=self._state,
+                type=try_enum(ApplicationCommandType, self.data['type']),
+                name=self.data['name'],
+                id=int(self.data['id']),
+                application_id=self.application_id,
+            )
+        else:
+            self.command = None
 
     @property
     def guild(self) -> Optional[Guild]:

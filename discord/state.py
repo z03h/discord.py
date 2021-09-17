@@ -227,15 +227,8 @@ class ConnectionState:
         self._status: Optional[str] = status
         self._intents: Intents = intents
 
-        self._application_command_pool: ApplicationCommandPool = (
-            # Odd solution to avoid circular imports
-            options.get('application_command_pool') or _get_default_command_pool()
-        )
         self._queued_global_application_commands: Dict[str, NativeApplicationCommand] = {}
         self._queued_guild_application_commands: Dict[int, Dict[str, NativeApplicationCommand]] = defaultdict(dict)
-
-        self._application_command_pool._add_state(self)
-        self._queue_existing_application_commands()
 
         self.cached_application_commands: Dict[int, ApplicationCommand] = {}
 
@@ -525,13 +518,6 @@ class ConnectionState:
         except asyncio.TimeoutError:
             _log.warning('Timed out waiting for chunks with query %r and limit %d for guild_id %d', query, limit, guild_id)
             raise
-
-    def _queue_existing_application_commands(self) -> None:
-        for key, command in self._application_command_pool.commands.items():
-            if guild_id := command.__application_command_guild_id__:
-                self._queued_guild_application_commands[guild_id][key] = command
-            else:
-                self._queued_global_application_commands[key] = command
 
     async def update_global_application_commands(self) -> None:
         payload = [
