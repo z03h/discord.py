@@ -711,6 +711,7 @@ class ApplicationCommand(metaclass=ApplicationCommandMeta):
     .. code-block:: python3
 
         class Hello(ApplicationCommand, name='hello'):
+            \"""Greet someone\"""
             user: discord.Member = option(description='The member to greet')
 
             async def callback(self, interaction):
