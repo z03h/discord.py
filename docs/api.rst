@@ -3547,7 +3547,6 @@ ApplicationCommandOption
 .. attributetable:: ApplicationCommandOption
 
 .. autoclass:: ApplicationCommandOption()
-    :members:
 
 ApplicationCommandOptionChoice
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -3555,7 +3554,6 @@ ApplicationCommandOptionChoice
 .. attributetable:: ApplicationCommandOptionChoice
 
 .. autoclass:: ApplicationCommandOptionChoice()
-    :members:
 
 PartialApplicationCommand
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -4178,7 +4176,6 @@ ApplicationCommandOptionChoice
 .. attributetable:: discord.application_commands.ApplicationCommandOptionChoice
 
 .. autoclass:: discord.application_commands.ApplicationCommandOptionChoice
-    :members:
 
 ApplicationCommandTree
 ~~~~~~~~~~~~~~~~~~~~~~
