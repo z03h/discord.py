@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from .application_commands import ApplicationCommandMeta as NativeApplicationCommand, ApplicationCommandTree
     from .abc import SnowflakeTime, PrivateChannel, GuildChannel, Snowflake
     from .channel import DMChannel
+    from .interactions import ApplicationCommand
     from .message import Message
     from .member import Member
     from .voice_client import VoiceProtocol
@@ -199,6 +200,11 @@ class Client:
         Defaults to ``False``.
 
         .. versionadded:: 2.0
+    fetch_application_commands_at_startup: :class:`bool`
+        Whether or not to automatically fetch all application commands and cache them at startup.
+        Defaults to ``True``.
+
+        .. versionadded:: 2.0
 
     Attributes
     -----------
@@ -236,6 +242,7 @@ class Client:
 
         self._enable_debug_events: bool = options.pop('enable_debug_events', False)
         self._update_commands_at_startup: bool = options.pop('update_application_commands_at_startup', False)
+        self._fetch_commands_at_startup: bool = options.pop('fetch_application_commands_at_startup', True)
 
         self._connection: ConnectionState = self._get_state(**options)
         self._connection.shard_count = self.shard_count
@@ -482,6 +489,12 @@ class Client:
         data = await self.http.static_login(token.strip())
         self._connection.user = ClientUser(state=self._connection, data=data)
 
+        if self._update_commands_at_startup:
+            await self.update_application_commands()
+
+        if self._fetch_commands_at_startup:
+            await self.fetch_application_commands()
+
     async def connect(self, *, reconnect: bool = True) -> None:
         """|coro|
 
@@ -607,18 +620,12 @@ class Client:
 
         A shorthand coroutine for :meth:`login` + :meth:`connect`.
 
-        The client will also attempt to update application commands here
-        if the ``update_application_commands_at_startup`` option is enabled.
-
         Raises
         -------
         TypeError
             An unexpected keyword argument was received.
         """
         await self.login(token)
-        if self._update_commands_at_startup:
-            await self.update_application_commands()
-
         await self.connect(reconnect=reconnect)
 
     def run(self, *args: Any, **kwargs: Any) -> None:
@@ -1675,6 +1682,59 @@ class Client:
             The command callback class that should be used when the command is invoked.
         """
         self._connection._application_commands_store.store_command(id, command)
+
+    def store_application_command_by_name(self, command: NativeApplicationCommand) -> None:
+        """Stores and starts listening to an application command solely by it's name.
+
+        See :meth:`.Client.store_application_command` for a more reliable alternative.
+
+        Parameters
+        ----------
+        command: Type[:class:`.application_commands.ApplicationCommand`]
+            The command callback class that should be used when the command is invoked.
+        """
+        self._connection._application_commands_store.store_command_named(command)
+
+    def store_application_command_tree(self, tree: ApplicationCommandTree) -> None:
+        """Stores and starts listening to an entire application command tree.
+
+        Parameters
+        ----------
+        tree: :class:`.application_commands.ApplicationCommandTree`
+            The command tree to store.
+        """
+        for command in tree.commands:
+            self.store_application_command_by_name(command)
+
+    async def fetch_application_commands(self, application_id: int = None, *, guild_id: int = None) -> List[ApplicationCommand]:
+        """|coro|
+
+        Fetches all application commands that belong to the given application ID.
+
+        Parameters
+        ----------
+        application_id: int
+            The ID of the application to fetch commands from.
+            Defaults to the application ID of this client.
+        guild_id: int
+            The ID of the guild where the commands should be fetched from.
+            Defaults to global.
+
+        Returns
+        -------
+        List[:class:`ApplicationCommand`]
+        """
+        application_id = application_id or self._connection.self_id or self._connection.application_id
+
+        if guild_id is None:
+            coro = self.http.get_global_commands(application_id)
+        else:
+            coro = self.http.get_guild_commands(application_id, guild_id)
+
+        return [
+            self._connection.add_application_command(command)
+            for command in await coro
+        ]
 
     async def update_application_commands(self) -> None:
         """|coro|

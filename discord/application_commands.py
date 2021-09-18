@@ -31,7 +31,15 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from .abc import GuildChannel, Messageable, Snowflake
-from .channel import TextChannel, _guild_channel_factory
+from .channel import (
+    TextChannel,
+    VoiceChannel,
+    CategoryChannel,
+    StoreChannel,
+    StageChannel,
+    Thread,
+    _guild_channel_factory,
+)
 from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType
 from .errors import IncompatibleCommandSignature
 from .member import Member
@@ -87,6 +95,11 @@ if TYPE_CHECKING:
             Member,
             Messageable,
             TextChannel,
+            Thread,
+            VoiceChannel,
+            StageChannel,
+            StoreChannel,
+            CategoryChannel,
             GuildChannel,
             Role,
             Object,
@@ -103,12 +116,35 @@ OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
     Member: ApplicationCommandOptionType.user,
     Messageable: ApplicationCommandOptionType.channel,
     TextChannel: ApplicationCommandOptionType.channel,
+    Thread: ApplicationCommandOptionType.channel,
+    VoiceChannel: ApplicationCommandOptionType.channel,
+    StageChannel: ApplicationCommandOptionType.channel,
+    StoreChannel: ApplicationCommandOptionType.channel,
+    CategoryChannel: ApplicationCommandOptionType.channel,
     GuildChannel: ApplicationCommandOptionType.channel,
     Role: ApplicationCommandOptionType.role,
     Object: ApplicationCommandOptionType.mentionable,
     Snowflake: ApplicationCommandOptionType.mentionable,
     float: ApplicationCommandOptionType.number,
 }
+
+CHANNEL_TYPE_MAPPING: Final[Dict[type, ChannelType]] = {
+    Messageable: (
+        ChannelType.text,
+        ChannelType.news,
+        ChannelType.news_thread,
+        ChannelType.public_thread,
+        ChannelType.private_thread,
+    ),
+    TextChannel: (ChannelType.text, ChannelType.news),
+    Thread: (ChannelType.news_thread, ChannelType.public_thread, ChannelType.private_thread),
+    VoiceChannel: ChannelType.voice,
+    StageChannel: ChannelType.stage_voice,
+    StoreChannel: ChannelType.store,
+    CategoryChannel: ChannelType.category,
+}
+
+APPLICABLE_CHANNEL_TYPES: Final[Tuple[Union[Type[GuildChannel], Type[Messageable]], ...]] = tuple(CHANNEL_TYPE_MAPPING)
 
 RESERVED_ATTRIBUTE_NAMES: Final[Tuple[str, ...]] = (
     '__application_command_type__',
@@ -256,6 +292,7 @@ class ApplicationCommandOption:
     description: str
     required: bool = False
     choices: List[ApplicationCommandOptionChoice] = MISSING
+    channel_types: List[ChannelType] = MISSING
     default: Any = MISSING
 
     def _update(self, **kwargs: Any) -> None:
@@ -274,6 +311,9 @@ class ApplicationCommandOption:
         if self.choices is not MISSING:
             payload['choices'] = [choice.to_dict() for choice in self.choices]
 
+        if self.channel_types is not MISSING:
+            payload['channel_types'] = [type.value for type in self.channel_types]
+
         return payload
 
     def __repr__(self) -> str:
@@ -288,6 +328,7 @@ def option(
     required: bool = MISSING,
     optional: bool = MISSING,
     choices: ApplicationCommandOptionChoiceT = MISSING,
+    channel_types: Iterable[ChannelType] = MISSING,
     default: Any = None,
 ) -> ApplicationCommandOption:
     """Creates an application command option which can be used on :class:`.ApplicationCommand`s.
@@ -311,6 +352,11 @@ def option(
 
         Argument should either be a mapping of choice names and their return values,
         A sequence of the possible choices, or a sequence of :class:`.ApplicationCommandOptionChoice`.
+    channel_types: Iterable[:class:`ChannelType`]
+        An iterable of all the channel types this option will take.
+        Defaults to taking all channel types.
+
+        Only applicable if the :param:`type` is ``channel``.
     default
         The default value passed to the attribute if the option is not passed.
         Defaults to ``None``.
@@ -348,12 +394,16 @@ def option(
                     for choice in choices
                 ]
 
+    if channel_types is not MISSING and not channel_types:
+        channel_types = MISSING
+
     return ApplicationCommandOption(
         type=type,
         name=name and name.casefold(),
         description=description,
         required=required,
         choices=choices,
+        channel_types=channel_types and list(channel_types),
         default=default,
     )
 
@@ -377,6 +427,34 @@ def _get_namespaces(attrs: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, An
     return local_ns, global_ns
 
 
+def _resolve_union_type_annotation(
+    *,
+    option: ApplicationCommandOption,
+    args: Iterable[Type[Any]],
+) -> None:
+    if not all(arg in APPLICABLE_CHANNEL_TYPES or isinstance(arg, ChannelType) for arg in args):
+        raise TypeError('union types for options are not supported.')
+
+    if not option.channel_types:
+        channel_types = set()
+
+        for arg in args:
+            if arg is GuildChannel:
+                return
+
+            try:
+                entry = CHANNEL_TYPE_MAPPING[arg]
+            except KeyError:
+                raise TypeError(f'{arg!r} is an incompatible option type.')
+
+            if isinstance(entry, ChannelType):
+                channel_types.add(entry)
+            else:
+                channel_types.update(entry)
+
+        option.channel_types = list(channel_types) or MISSING
+
+
 def _resolve_option_annotation(
     option: ApplicationCommandOption,
     annotation: str,
@@ -391,9 +469,18 @@ def _resolve_option_annotation(
         except AttributeError:
             pass
         else:
-            if origin is Union and annotation.__args__[-1] is type(None):
-                annotation = annotation.__args__[0]
-                option.required = False
+            if origin is Union:
+                args = annotation.__args__
+
+                if args[-1] is type(None):
+                    args = annotation.__args__[:-1]
+                    option.required = False
+
+                if len(args) == 1:
+                    annotation = args[0]
+                else:
+                    annotation = GuildChannel
+                    _resolve_union_type_annotation(option=option, args=args)
 
             elif origin is Literal:
                 annotation = type(annotation.__args__[0])
@@ -402,10 +489,14 @@ def _resolve_option_annotation(
                     for arg in args
                 ]
 
+        if annotation in APPLICABLE_CHANNEL_TYPES and not option.channel_types:
+            entry = CHANNEL_TYPE_MAPPING[annotation]
+            option.channel_types = [entry] if isinstance(entry, ChannelType) else list(entry)
+
         try:
             annotation = OPTION_TYPE_MAPPING[annotation]
         except KeyError:
-            raise ValueError(f'{annotation!r} is an incompatable option type.')
+            raise TypeError(f'{annotation!r} is an incompatable option type.')
 
     option.type = annotation
 
@@ -667,9 +758,16 @@ class ApplicationCommandStore:
     def __init__(self, state: ConnectionState) -> None:
         self.state: ConnectionState = state
         self.commands: Dict[int, ApplicationCommandMeta] = {}
+        self.commands_by_name: Dict[Tuple[str, int], ApplicationCommandMeta] = {}
 
     def store_command(self, id: int, command: ApplicationCommandMeta) -> None:
         self.commands[id] = command
+
+    def store_command_named(self, command: ApplicationCommandMeta) -> None:
+        self.commands_by_name[
+            command.__application_command_name__,
+            command.__application_command_guild_id__ or None,
+        ] = command
 
     async def _handle_error(
         self,
@@ -832,9 +930,15 @@ class ApplicationCommandStore:
 
     def dispatch(self, data: ApplicationCommandInteractionData, interaction: Interaction) -> None:
         try:
-            command_factory = self.commands[int(data['id'])]
+            command_factory = self.commands[interaction.command.id]
         except KeyError:
-            return
+            try:
+                command_factory = self.commands_by_name[
+                    interaction.command.name,
+                    interaction.command.resolved and interaction.command.resolved.guild_id,
+                ]  # Currently this will fail for guild commands if application commands aren't cached.
+            except KeyError:
+                return  # Maybe raise an error here?
 
         kwargs = {'data': data, 'command': command_factory, 'interaction': interaction}
         try:
