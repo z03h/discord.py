@@ -820,11 +820,11 @@ class ApplicationCommandStore:
         for option in options:
             if option['type'] < 3:
                 command = command.__application_command_children__[option['name']]
-                result = option['options']
+                result = option.get('options', [])
 
                 if option['type'] == 2:
                     command = command.__application_command_children__[result[0]['name']]
-                    result = result[0]['options']
+                    result = result[0].get('options', [])
 
                 break
 
