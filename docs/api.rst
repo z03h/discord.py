@@ -3533,6 +3533,38 @@ Integration
 .. autoclass:: StreamIntegration()
     :members:
 
+ApplicationCommand
+~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: ApplicationCommand
+
+.. autoclass:: ApplicationCommand()
+    :members:
+
+ApplicationCommandOption
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: ApplicationCommandOption
+
+.. autoclass:: ApplicationCommandOption()
+    :members:
+
+ApplicationCommandOptionChoice
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: ApplicationCommandOptionChoice
+
+.. autoclass:: ApplicationCommandOptionChoice()
+    :members:
+
+PartialApplicationCommand
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: PartialApplicationCommand
+
+.. autoclass:: PartialApplicationCommand()
+    :members:
+
 Interaction
 ~~~~~~~~~~~~
 
@@ -4110,6 +4142,74 @@ PublicUserFlags
 
 .. autoclass:: PublicUserFlags()
     :members:
+
+Application Commands
+--------------------
+
+This module aids in creating, parsing, and responding to application commands.
+
+ApplicationCommand
+~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: discord.application_commands.ApplicationCommand
+
+.. autoclass:: discord.application_commands.ApplicationCommand()
+    :members:
+
+ApplicationCommandMeta
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: discord.application_commands.ApplicationCommandMeta
+
+.. autoclass:: discord.application_commands.ApplicationCommandMeta
+    :members:
+
+ApplicationCommandOption
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: discord.application_commands.ApplicationCommandOption
+
+.. autoclass:: discord.application_commands.ApplicationCommandOption()
+    :members:
+
+ApplicationCommandOptionChoice
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: discord.application_commands.ApplicationCommandOptionChoice
+
+.. autoclass:: discord.application_commands.ApplicationCommandOptionChoice
+    :members:
+
+ApplicationCommandTree
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: discord.application_commands.ApplicationCommandTree
+
+.. autoclass:: discord.application_commands.ApplicationCommandTree
+    :members:
+
+SlashCommand
+~~~~~~~~~~~~
+
+.. autoclass:: discord.application_commands.SlashCommand
+    :members:
+
+UserCommand
+~~~~~~~~~~~
+
+.. autoclass:: discord.application_commands.UserCommand
+    :members:
+
+MessageCommand
+~~~~~~~~~~~~~~
+
+.. autoclass:: discord.application_commands.MessageCommand
+    :members:
+
+option
+~~~~~~
+
+.. autofunction:: discord.application_commands.option
 
 .. _discord_ui_kit:
 
