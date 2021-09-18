@@ -331,13 +331,13 @@ def option(
     channel_types: Iterable[ChannelType] = MISSING,
     default: Any = None,
 ) -> ApplicationCommandOption:
-    """Creates an application command option which can be used on :class:`.ApplicationCommand`s.
+    """Creates an application command option which can be used on :class:`.ApplicationCommand`.
 
     All parameters here are keyword-only.
 
     Parameters
     ----------
-    type: Union[:class:`~.ApplicationCommandType`, type]
+    type: Union[:class:`~.ApplicationCommandType`, :class:`type`]
         The type of this option. Defaults to the annotation given with this option, or ``str``.
     name: str
         The name of this option.
@@ -347,16 +347,16 @@ def option(
         Whether or not this option is required. Defaults to ``False``.
     optional: bool
         An inverted alias for ``required``. This cannot be used with ``required``, and vice-versa.
-    choices: Union[Dict[str, Union[str, int, float]], Sequence[Union[str, int, float]], Sequence[:class:`.ApplicationCommandOptionChoice`]]
+    choices
         If specified, only the choices given will be available to be selected by the user.
 
-        Argument should either be a mapping of choice names and their return values,
+        Argument should either be a mapping of choice names to their return values,
         A sequence of the possible choices, or a sequence of :class:`.ApplicationCommandOptionChoice`.
     channel_types: Iterable[:class:`ChannelType`]
         An iterable of all the channel types this option will take.
         Defaults to taking all channel types.
 
-        Only applicable if the :param:`type` is ``channel``.
+        Only applicable if the ``type`` is ``channel``.
     default
         The default value passed to the attribute if the option is not passed.
         Defaults to ``None``.
@@ -550,7 +550,7 @@ def _get_application_command_options(
 class ApplicationCommandMeta(type):
     """The metaclass for defining an application command.
 
-    Anything documented here can be used directly on classes that use this metaclass.
+    See :class:`.ApplicationCommand` for an example on defining one.
 
     Parameters
     ----------
@@ -565,7 +565,7 @@ class ApplicationCommandMeta(type):
     default_permission: bool
         Whether or not this command is enabled by default when added to a guild.
         Defaults to ``True``
-    option_kwargs: Dict[str, Any]:
+    option_kwargs: Dict[str, Any]
         Default kwargs to pass in for each option.
     guild_id: int
         The ID of the guild that this command will automatically be added to.
@@ -703,7 +703,20 @@ class ApplicationCommandMeta(type):
 
 
 class ApplicationCommand(metaclass=ApplicationCommandMeta):
-    """Represents an application command."""
+    """Represents an application command.
+
+    Example
+    -------
+
+    .. code-block:: python3
+
+        class Hello(ApplicationCommand, name='hello'):
+            user: discord.Member = option(description='The member to greet')
+
+            async def callback(self, interaction):
+                user = self.user or interaction.user
+                await interaction.response.send_message(f'Hello {user.mention}!')
+    """
 
     async def command_check(self, interaction: Interaction) -> bool:
         """|coro|

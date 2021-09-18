@@ -4157,9 +4157,7 @@ ApplicationCommand
 ApplicationCommandMeta
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. attributetable:: discord.application_commands.ApplicationCommandMeta
-
-.. autoclass:: discord.application_commands.ApplicationCommandMeta
+.. autoclass:: discord.application_commands.ApplicationCommandMeta()
     :members:
 
 ApplicationCommandOption
