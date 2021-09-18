@@ -49,6 +49,7 @@ __all__ = (
     'ApplicationCommand',
     'ApplicationCommandOption',
     'ApplicationCommandOptionChoice',
+    'PartialApplicationCommand',
 )
 
 if TYPE_CHECKING:
