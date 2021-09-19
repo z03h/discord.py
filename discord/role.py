@@ -25,11 +25,12 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, TypeVar, Union, overload, TYPE_CHECKING
 
+from .asset import Asset
 from .permissions import Permissions
 from .errors import InvalidArgument
 from .colour import Colour
 from .mixins import Hashable
-from .utils import snowflake_time, _get_as_snowflake, MISSING
+from .utils import snowflake_time, _bytes_to_base64_data, _get_as_snowflake, MISSING
 
 __all__ = (
     'RoleTags',
@@ -177,6 +178,7 @@ class Role(Hashable):
         'name',
         '_permissions',
         '_colour',
+        '_icon',
         'position',
         'managed',
         'mentionable',
@@ -242,6 +244,7 @@ class Role(Hashable):
         self.hoist: bool = data.get('hoist', False)
         self.managed: bool = data.get('managed', False)
         self.mentionable: bool = data.get('mentionable', False)
+        self._icon: Optional[str] = data.get('icon')
         self.tags: Optional[RoleTags]
 
         try:
@@ -298,6 +301,14 @@ class Role(Hashable):
         return self.colour
 
     @property
+    def icon(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: The role's icon, ``None`` if the role does not have one.
+
+        .. versionadded:: 2.0
+        """
+        return self._icon and Asset._from_role_icon(self._state, role_id=self.id, icon_hash=self._icon)
+
+    @property
     def created_at(self) -> datetime.datetime:
         """:class:`datetime.datetime`: Returns the role's creation time in UTC."""
         return snowflake_time(self.id)
@@ -347,6 +358,7 @@ class Role(Hashable):
         permissions: Permissions = MISSING,
         colour: Union[Colour, int] = MISSING,
         color: Union[Colour, int] = MISSING,
+        icon: bytes = MISSING,
         hoist: bool = MISSING,
         mentionable: bool = MISSING,
         position: int = MISSING,
@@ -375,6 +387,9 @@ class Role(Hashable):
             The new permissions to change to.
         colour: Union[:class:`Colour`, :class:`int`]
             The new colour to change to. (aliased to color as well)
+        icon: :class:`bytes`
+            A :term:`py:bytes-like object` representing the new role icon. Only PNG, JPEG, and WebP is supported.
+            Could be ``None`` to denote removal of the icon.
         hoist: :class:`bool`
             Indicates if the role should be shown separately in the member list.
         mentionable: :class:`bool`
@@ -418,6 +433,12 @@ class Role(Hashable):
 
         if permissions is not MISSING:
             payload['permissions'] = permissions.value
+
+        if icon is not MISSING:
+            if icon is None:
+                payload['icon'] = None
+            else:
+                payload['icon'] = _bytes_to_base64_data(icon)
 
         if hoist is not MISSING:
             payload['hoist'] = hoist

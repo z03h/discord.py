@@ -35,6 +35,7 @@ class _RoleOptional(TypedDict, total=False):
 class Role(_RoleOptional):
     id: Snowflake
     name: str
+    icon: str
     color: int
     hoist: bool
     position: int
