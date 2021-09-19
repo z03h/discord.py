@@ -90,6 +90,8 @@ class ApplicationCommandOptionChoice(NamedTuple):
     """Represents a choice of an :class:`.ApplicationCommandOption`.
     This is not to be confused with :class:`.application_commands.ApplicationCommandOptionChoice`.
 
+    .. versionadded:: 2.0
+
     Attributes
     ----------
     name: str
@@ -105,6 +107,8 @@ class ApplicationCommandOption(NamedTuple):
     """Represents an option of an :class:`.ApplicationCommand`.
 
     This is not to be confused with :class:`.application_commands.ApplicationCommandOption`.
+
+    .. versionadded:: 2.0
 
     Attributes
     ----------
@@ -158,6 +162,8 @@ class ApplicationCommandOption(NamedTuple):
 class PartialApplicationCommand:
     """Represents an application command with minimal data.
     This is typically retrieved through :attr:`Interaction.command`.
+
+    .. versionadded:: 2.0
 
     Attributes
     ----------
@@ -217,6 +223,8 @@ class ApplicationCommand(Hashable):
 
     This is not to be confused with :class:`.application_commands.ApplicationCommand`.
     See that if you want to construct your own application commands.
+
+    .. versionadded:: 2.0
 
     .. container:: operations
 
@@ -321,7 +329,13 @@ class ApplicationCommand(Hashable):
         return self._state._get_guild(self.guild_id)
 
     def is_global(self) -> bool:
-        """bool: Whether or not this command is a global command."""
+        """Whether or not this command is a global command.
+
+        Returns
+        -------
+        bool
+            Whether or not this command is global.
+        """
         return self.guild_id is None
 
     async def edit(
