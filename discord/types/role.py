@@ -29,13 +29,13 @@ from .snowflake import Snowflake
 
 
 class _RoleOptional(TypedDict, total=False):
+    icon: str
     tags: RoleTags
 
 
 class Role(_RoleOptional):
     id: Snowflake
     name: str
-    icon: str
     color: int
     hoist: bool
     position: int
