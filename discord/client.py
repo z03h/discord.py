@@ -54,6 +54,7 @@ from .state import ConnectionState
 from .utils import MISSING
 from .object import Object
 from .backoff import ExponentialBackoff
+from .interactions import Interaction
 from .webhook import Webhook
 from .iterators import GuildIterator
 from .appinfo import AppInfo
@@ -261,8 +262,15 @@ class Client:
         return self.ws
 
     def _get_state(self, **options: Any) -> ConnectionState:
-        return ConnectionState(dispatch=self.dispatch, handlers=self._handlers,
-                               hooks=self._hooks, http=self.http, loop=self.loop, **options)
+        return ConnectionState(
+            dispatch=self.dispatch,
+            interaction_factory=self._interaction_factory,
+            handlers=self._handlers,
+            hooks=self._hooks,
+            http=self.http,
+            loop=self.loop,
+            **options,
+        )
 
     def _handle_ready(self) -> None:
         self._ready.set()
@@ -377,6 +385,9 @@ class Client:
         wrapped = self._run_event(coro, event_name, *args, **kwargs)
         # Schedules the task
         return asyncio.create_task(wrapped, name=f'discord.py: {event_name}')
+
+    def _interaction_factory(self, **kwargs) -> Interaction:
+        return Interaction(**kwargs, client=self)
 
     def dispatch(self, event: str, *args: Any, **kwargs: Any) -> None:
         _log.debug('Dispatching event %s', event)

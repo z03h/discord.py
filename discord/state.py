@@ -157,6 +157,7 @@ class ConnectionState:
         *,
         dispatch: Callable,
         handlers: Dict[str, Callable],
+        interaction_factory: Callable[..., Interaction],
         hooks: Dict[str, Callable],
         http: HTTPClient,
         loop: asyncio.AbstractEventLoop,
@@ -170,6 +171,7 @@ class ConnectionState:
 
         self.dispatch: Callable = dispatch
         self.handlers: Dict[str, Callable] = handlers
+        self.interaction_factory: Callable[..., Interaction] = interaction_factory
         self.hooks: Dict[str, Callable] = hooks
         self.shard_count: Optional[int] = None
         self._ready_task: Optional[asyncio.Task] = None
@@ -754,7 +756,7 @@ class ConnectionState:
                     self.dispatch('reaction_clear_emoji', reaction)
 
     def parse_interaction_create(self, data) -> None:
-        interaction = Interaction(data=data, state=self)
+        interaction = self.interaction_factory(data=data, state=self)
 
         if data['type'] == 2:  # application command
             self._application_commands_store.dispatch(data['data'], interaction)

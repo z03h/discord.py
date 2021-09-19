@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     )
 
     from .application_commands import ApplicationCommandOption as NativeCommandOption
+    from .client import Client
     from .enums import (
         ApplicationCommandType,
         ApplicationCommandOptionType
@@ -456,6 +457,11 @@ class Interaction:
     token: :class:`str`
         The token to continue the interaction. These are valid
         for 15 minutes.
+    client: :class:`Client`
+        The client that dispatched the interaction.
+        This is useful when handling interactions in a separate file.
+    version: :class:`int`
+        The auto-incrementing version identifier used by Discord.
     data: Dict[str, Any]
         The raw interaction data.
     """
@@ -474,6 +480,7 @@ class Interaction:
         'command',
         'token',
         'version',
+        'client',
         '_permissions',
         '_state',
         '_session',
@@ -483,7 +490,8 @@ class Interaction:
         '_cs_channel',
     )
 
-    def __init__(self, *, data: InteractionPayload, state: ConnectionState):
+    def __init__(self, *, data: InteractionPayload, state: ConnectionState, client: Client):
+        self.client: Client = client
         self._state: ConnectionState = state
         self._session: ClientSession = state.http._HTTPClient__session
         self._original_message: Optional[InteractionMessage] = None
