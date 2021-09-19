@@ -710,11 +710,14 @@ class ApplicationCommand(metaclass=ApplicationCommandMeta):
 
     .. code-block:: python3
 
+        import discord
+        from discord.application_commands import ApplicationCommand, option
+
         class Hello(ApplicationCommand, name='hello'):
             \"""Greet someone\"""
             user: discord.Member = option(description='The member to greet')
 
-            async def callback(self, interaction):
+            async def callback(self, interaction: discord.Interaction):
                 user = self.user or interaction.user
                 await interaction.response.send_message(f'Hello {user.mention}!')
     """
