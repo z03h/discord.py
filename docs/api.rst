@@ -3811,6 +3811,23 @@ Template
 .. autoclass:: Template()
     :members:
 
+WelcomeScreen
+~~~~~~~~~~~~~
+
+.. attributetable:: WelcomeScreen
+
+.. autoclass:: WelcomeScreen()
+    :members:
+    :inherited-members:
+
+WelcomeChannel
+~~~~~~~~~~~~~~
+
+.. attributetable:: WelcomeChannel
+
+.. autoclass:: WelcomeChannel
+    :members:
+
 WidgetChannel
 ~~~~~~~~~~~~~~~
 
@@ -4004,6 +4021,15 @@ PartialMessage
 
 .. autoclass:: PartialMessage
     :members:
+
+PartialWelcomeScreen
+~~~~~~~~~~~~~~~~~~~~
+
+.. attributetable:: PartialWelcomeScreen
+
+.. autoclass:: PartialWelcomeScreen
+    :members:
+    :inherited-members:
 
 SelectOption
 ~~~~~~~~~~~~~
