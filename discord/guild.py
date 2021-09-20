@@ -26,57 +26,55 @@ from __future__ import annotations
 
 import copy
 import unicodedata
+
 from typing import (
     Any,
     ClassVar,
     Dict,
     List,
+    Literal,
     NamedTuple,
+    Optional,
     Sequence,
     Set,
-    Literal,
-    Optional,
     TYPE_CHECKING,
     Tuple,
     Union,
     overload,
 )
 
-from . import utils, abc
-from .role import Role
-from .member import Member, VoiceState
-from .emoji import Emoji
-from .errors import InvalidData
-from .permissions import PermissionOverwrite
+from . import abc, utils
+from .asset import Asset
+from .channel import _guild_channel_factory, _threaded_guild_channel_factory
 from .colour import Colour
-from .errors import InvalidArgument, ClientException
-from .channel import *
-from .channel import _guild_channel_factory
-from .channel import _threaded_guild_channel_factory
+from .emoji import Emoji
 from .enums import (
     AuditLogAction,
+    ChannelType,
+    ContentFilter,
+    NSFWLevel,
+    NotificationLevel,
+    VerificationLevel,
     VideoQualityMode,
     VoiceRegion,
-    ChannelType,
-    try_enum,
-    VerificationLevel,
-    ContentFilter,
-    NotificationLevel,
-    NSFWLevel,
+    try_enum
 )
-from .mixins import Hashable
-from .user import User
-from .invite import Invite
-from .iterators import AuditLogIterator, MemberIterator
-from .widget import Widget
-from .asset import Asset
+from .errors import ClientException, InvalidArgument, InvalidData
+from .file import File
 from .flags import SystemChannelFlags
 from .integrations import Integration, _integration_factory
+from .invite import Invite
+from .iterators import AuditLogIterator, MemberIterator
+from .member import Member, VoiceState
+from .mixins import Hashable
+from .permissions import PermissionOverwrite
+from .role import Role
 from .stage_instance import StageInstance
-from .threads import Thread, ThreadMember
 from .sticker import GuildSticker
-from .file import File
-
+from .threads import Thread, ThreadMember
+from .user import User
+from .welcome_screen import WelcomeScreen
+from .widget import Widget
 
 __all__ = (
     'Guild',
@@ -85,6 +83,8 @@ __all__ = (
 MISSING = utils.MISSING
 
 if TYPE_CHECKING:
+    import datetime
+
     from .abc import Snowflake, SnowflakeTime
     from .types.guild import Ban as BanPayload, Guild as GuildPayload, MFALevel, GuildFeature
     from .types.threads import (
@@ -97,8 +97,6 @@ if TYPE_CHECKING:
     from .webhook import Webhook
     from .state import ConnectionState
     from .voice_client import VoiceProtocol
-
-    import datetime
 
     VocalGuildChannel = Union[VoiceChannel, StageChannel]
     GuildChannel = Union[VoiceChannel, StageChannel, TextChannel, CategoryChannel, StoreChannel]
@@ -2817,6 +2815,31 @@ class Guild(Hashable):
             payload['enabled'] = enabled
 
         await self._state.http.edit_widget(self.id, payload=payload)
+
+    async def welcome_screen(self) -> WelcomeScreen:
+        """|coro|
+
+        Fetches and returns the guild's welcome screen.
+
+        You must have the :attr:`~Permissions.manage_guild` permission to
+        use this.
+
+        .. versionadded:: 2.0
+
+        Raises
+        -------
+        Forbidden
+            You do not have enough permissions to get the welcome screen.
+        HTTPException
+            Retrieving the welcome screen failed.
+
+        Returns
+        -------
+        :class:`WelcomeScreen`
+            The welcome screen that was fetched.
+        """
+        data = await self._state.http.get_welcome_screen(guild_id=self.id)
+        return WelcomeScreen(data=data, guild=self, state=self._state)
 
     async def chunk(self, *, cache: bool = True) -> None:
         """|coro|

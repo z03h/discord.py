@@ -25,9 +25,9 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import sys
+import weakref
 from typing import (
     Any,
     ClassVar,
@@ -44,13 +44,20 @@ from typing import (
     Union,
 )
 from urllib.parse import quote as _uriquote
-import weakref
 
 import aiohttp
 
-from .errors import HTTPException, Forbidden, NotFound, LoginFailure, DiscordServerError, GatewayNotFound, InvalidArgument
-from .gateway import DiscordClientWebSocketResponse
 from . import __version__, utils
+from .errors import (
+    DiscordServerError,
+    Forbidden,
+    GatewayNotFound,
+    HTTPException,
+    InvalidArgument,
+    LoginFailure,
+    NotFound,
+)
+from .gateway import DiscordClientWebSocketResponse
 from .utils import MISSING
 
 _log = logging.getLogger(__name__)
@@ -81,8 +88,8 @@ if TYPE_CHECKING:
         webhook,
         channel,
         widget,
+        welcome_screen,
         threads,
-        voice,
         sticker,
     )
     from .types.snowflake import Snowflake, SnowflakeList
@@ -1490,6 +1497,16 @@ class HTTPClient:
     ) -> Response[None]:
         r = Route('DELETE', '/channels/{channel_id}/permissions/{target}', channel_id=channel_id, target=target)
         return self.request(r, reason=reason)
+
+    # Welcome screens
+
+    def get_welcome_screen(self, guild_id: Snowflake) -> Response[welcome_screen.WelcomeScreen]:
+        return self.request(Route('GET', '/guilds/{guild_id}/welcome-screen', guild_id=guild_id))
+
+    def edit_welcome_screen(
+        self, guild_id: Snowflake, payload, *, reason: Optional[str] = None
+    ) -> Response[welcome_screen.WelcomeScreen]:
+        return self.request(Route('PATCH', '/guilds/{guild_id}/welcome-screen', guild_id=guild), json=payload, reason=reason)
 
     # Voice management
 
