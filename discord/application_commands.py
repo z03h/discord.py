@@ -24,6 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
+import functools
 import inspect
 import sys
 
@@ -107,6 +108,11 @@ if TYPE_CHECKING:
             float,
         ]
     ]
+
+_PY_310 = sys.version_info >= (3, 10)
+
+if _PY_310:
+    from types import UnionType
 
 OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
     str: ApplicationCommandOptionType.string,
@@ -465,7 +471,10 @@ def _resolve_option_annotation(
 
     if not isinstance(annotation, ApplicationCommandOptionType):
         try:
-            origin = annotation.__origin__
+            if _PY_310 and isinstance(annotation, UnionType):
+                origin = Union
+            else:
+                origin = annotation.__origin__
         except AttributeError:
             pass
         else:
@@ -624,7 +633,7 @@ class ApplicationCommandMeta(type):
         if description is MISSING:
             try:
                 description = inspect.cleandoc(attrs['__doc__'])
-            except KeyError:
+            except (AttributeError, KeyError):  # AttributeError if docstring is None
                 raise TypeError('application commands must have a description.')
 
         if type is ApplicationCommandType.chat_input:
