@@ -315,7 +315,7 @@ class ApplicationCommandOption:
         """Makes this option an auto-complete option with the given callback.
 
         The callback should take two parameters: ``self`` and ``interaction``.
-        The value that is returned will then be passed into :class:`~.InteractionResponse.update_autocomplete_choices`.
+        The value that is returned will then be passed into :meth:`~.InteractionResponse.update_autocomplete_choices`.
         See it's documentation for information on the return types.
 
         You can access the inputted value using :attr:`~.Interaction.value`.

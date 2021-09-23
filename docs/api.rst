@@ -4193,6 +4193,10 @@ ApplicationCommandOption
 
 .. autoclass:: discord.application_commands.ApplicationCommandOption()
     :members:
+    :exclude-members: autocomplete
+
+    .. automethod:: ApplicationCommandOption.autocomplete()
+        :decorator:
 
 ApplicationCommandOptionChoice
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
