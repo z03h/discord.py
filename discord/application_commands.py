@@ -1077,7 +1077,8 @@ class ApplicationCommandStore:
                     interaction.command.resolved and interaction.command.resolved.guild_id,
                 ]  # Currently this will fail for guild commands if application commands aren't cached.
             except KeyError:
-                return  # Maybe raise an error here?
+                message = f'Received command {interaction.command.name!r} with ID {interaction.command.id}, but it is not stored'
+                raise ValueError(message) from None  # TODO: Custom exception here
 
         return command_factory
 
