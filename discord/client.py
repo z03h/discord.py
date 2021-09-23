@@ -441,6 +441,16 @@ class Client:
         print(f'Ignoring exception in {event_method}', file=sys.stderr)
         traceback.print_exc()
 
+    async def on_application_command_error(self, interaction: Interaction, error: Exception) -> None:
+        """|coro|
+
+        The default application command error handler.
+
+        If this isn't overwritten, it will default to printing the error to :data:`sys.stderr`.
+        """
+        print(f'Ignoring exception in application command {interaction.command.name!r} (ID: {interaction.command.id}):', file=sys.stderr)
+        traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+
     # hooks
 
     async def _call_before_identify_hook(self, shard_id: Optional[int], *, initial: bool = False) -> None:

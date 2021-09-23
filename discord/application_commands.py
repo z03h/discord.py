@@ -48,10 +48,11 @@ from .message import Message
 from .object import Object
 from .role import Role
 from .user import User
-from .utils import find, MISSING, resolve_annotation
+from .utils import get, find, MISSING, resolve_annotation
 
 from typing import (
     Any,
+    Awaitable,
     Dict,
     Final,
     Iterable,
@@ -69,7 +70,7 @@ from typing import (
 
 if TYPE_CHECKING:
     from .guild import Guild
-    from .interactions import Interaction
+    from .interactions import Interaction, AutocompleteChoicesT
     from .state import ConnectionState
 
     from .types.interactions import (
@@ -78,6 +79,7 @@ if TYPE_CHECKING:
         ApplicationCommandOptionChoice as ApplicationCommandOptionChoicePayload,
         ApplicationCommandInteractionData,
         ApplicationCommandInteractionDataOption,
+        ApplicationCommandInteractionDataResolved,
     )
 
     ApplicationCommandOptionChoiceT = Union[
@@ -108,6 +110,8 @@ if TYPE_CHECKING:
             float,
         ]
     ]
+
+    AutocompleteCallbackT = Callable[['ApplicationCommandMeta', Interaction], Awaitable[AutocompleteChoicesT]]
 
 _PY_310 = sys.version_info >= (3, 10)
 
@@ -300,11 +304,53 @@ class ApplicationCommandOption:
     choices: List[ApplicationCommandOptionChoice] = MISSING
     channel_types: List[ChannelType] = MISSING
     default: Any = MISSING
+    _autocomplete_callback: AutocompleteCallbackT = MISSING
 
     def _update(self, **kwargs: Any) -> None:
         for k, v in kwargs.items():
             if not getattr(self, k, False):
                 setattr(self, k, v)
+
+    def autocomplete(self, callback: AutocompleteCallbackT) -> AutocompleteCallbackT:
+        """Makes this option an auto-complete option with the given callback.
+
+        The callback should take two parameters: ``self`` and ``interaction``.
+        The value that is returned will then be passed into :class:`~.InteractionResponse.update_autocomplete_choices`.
+        See it's documentation for information on the return types.
+
+        You can access the inputted value using :attr:`~.Interaction.value`.
+
+        .. note:: There can only be a maximum of 25 choices.
+
+        .. note::
+            Some attributes that have not been filled in will be empty.
+            That is, trying to access them will raise an :exc:`AttributeError`.
+
+        Usage: ::
+
+            class AutoComplete(ApplicationCommand, name='autocomplete-test'):
+                \"""Test autocomplete options\"""
+                text: str = option(description='Type here')
+
+                @text.autocomplete
+                async def autocomplete_text(self, interaction: discord.Interaction):
+                    return get_matches(['apple', 'banana'], interaction.value)
+
+        Raises
+        ------
+        ValueError
+            There is already an autocomplete callback for this option.
+        TypeError
+            This cannot be used in conjunction with ``choices``.
+        """
+        if self._autocomplete_callback:
+            raise ValueError('There is already an autocomplete callback for this option.')
+
+        if self.choices:
+            raise TypeError('Cannot be used in conjunction with "choices" parameter')
+
+        self._autocomplete_callback = callback
+        return callback
 
     def to_dict(self) -> ApplicationCommandOptionPayload:
         payload = {
@@ -319,6 +365,9 @@ class ApplicationCommandOption:
 
         if self.channel_types is not MISSING:
             payload['channel_types'] = [type.value for type in self.channel_types]
+
+        if self._autocomplete_callback is not MISSING:
+            payload['autocomplete'] = True
 
         return payload
 
@@ -391,7 +440,7 @@ def option(
                 for k, v in choices.items()
             ]
 
-        elif isinstances(choices, Sequence):
+        elif isinstance(choices, Sequence):
             if isinstance(choices[0], ApplicationCommandOptionChoice):
                 choices = list(choices)
             else:
@@ -822,6 +871,25 @@ class ApplicationCommandStore:
             else:
                 self.state.dispatch('application_command_completion', interaction)
 
+    async def request_autocomplete_choices(
+        self,
+        command: ApplicationCommand,
+        option: ApplicationCommandOption,
+        interaction: Interaction,
+    ) -> None:
+        if interaction.response.is_done():
+            return
+        try:
+            result = option._autocomplete_callback(command, interaction)
+            if inspect.isasyncgen(result):
+                result = [choice async for choice in result]
+            else:
+                result = await result
+
+            await interaction.response.update_autocomplete_choices(result)
+        except Exception as exc:
+            return await self._handle_error(command, interaction, exc)
+
     def _sanitize_command(
         self,
         *,
@@ -897,34 +965,17 @@ class ApplicationCommandStore:
     def _parse_options(
         self,
         *,
-        data: ApplicationCommandInteractionData,
-        command: ApplicationCommandMeta,
-        interaction: Interaction,
-    ) -> ApplicationCommand:
-        options = data.get('options', [])
-        resolved = data.get('resolved', {})
-        command, options = self._sanitize_command(options=options, command=command)
-        maybe_guild = self.state._get_guild(interaction.guild_id)
-
-        if data['type'] > 1:
-            # Not a slash command
-            self._parse_context_menu(
-                data=data,
-                resolved=resolved,
-                guild=maybe_guild,
-                interaction=interaction,
-            )
-            return command
-
-        for name, option in command.__class__.__application_command_options__.items():
-            setattr(command, name, option.default)  # For options that were not given
-
+        options: List[ApplicationCommandInteractionDataOption],
+        resolved: ApplicationCommandInteractionDataResolved,
+        command: ApplicationCommand,
+        guild: Optional[Guild],
+    ) -> None:
         for option in options:
             value = option['value']
             type = option['type']
 
             if type == 6:
-                value = self._resolve_user(resolved=resolved, guild=maybe_guild, user_id=value)
+                value = self._resolve_user(resolved=resolved, guild=guild, user_id=value)
 
             elif type == 7:
                 # Prefer from cache (Data is only partial)
@@ -933,7 +984,7 @@ class ApplicationCommandStore:
                     channel_data = defaultdict(lambda: None)
                     channel_data.update(resolved['channels'][value])
                     factory, _ = _guild_channel_factory(channel_data['type'])
-                    value = factory(state=self.state, data=channel_data, guild=maybe_guild)
+                    value = factory(state=self.state, data=channel_data, guild=guild)
                 else:
                     value = cached
 
@@ -941,20 +992,82 @@ class ApplicationCommandStore:
                 # Here we prefer from payload instead, as the data
                 # is more up to date.
                 role_data = resolved['roles'][value]
-                value = Role(state=self.state, data=role_data, guild=maybe_guild)
+                value = Role(state=self.state, data=role_data, guild=guild)
 
             elif type == 9:
                 value = Object(id=int(value))
 
             for k, v in command.__class__.__application_command_options__.items():
-                v: ApplicationCommandOption
                 if v.name == option['name']:
                     setattr(command, k, value)
                     break
 
+    def _sanitize_data(
+        self,
+        data: ApplicationCommandInteractionData,
+        command: ApplicationCommandMeta,
+        interaction: Interaction,
+    ) -> Tuple[
+        List[ApplicationCommandInteractionDataOption],
+        ApplicationCommandInteractionDataResolved,
+        ApplicationCommandMeta,
+        Guild,
+    ]:
+        options = data.get('options', [])
+        resolved = data.get('resolved', {})
+        command, options = self._sanitize_command(options=options, command=command)
+        maybe_guild = self.state._get_guild(interaction.guild_id)
+
+        return options, resolved, command, maybe_guild
+
+    def _parse_autocomplete_options(
+        self,
+        *,
+        data: ApplicationCommandInteractionData,
+        command: ApplicationCommandMeta,
+        interaction: Interaction,
+    ) -> Tuple[ApplicationCommand, ApplicationCommandOption]:
+        options, resolved, command, guild = self._sanitize_data(data=data, command=command, interaction=interaction)
+
+        for option in options:
+            if option.get('focused'):
+                interaction.value = option['value']
+                break
+
+        option = find(lambda o: o.get('focused'), options)
+        interaction.value = option['value']
+
+        self._parse_options(options=options, resolved=resolved, command=command, guild=guild)
+
+        focused_option = get(command.__class__.__application_command_options__.values(), name=option['name'])
+        return command, focused_option
+
+    def _parse_application_command_options(
+        self,
+        *,
+        data: ApplicationCommandInteractionData,
+        command: ApplicationCommandMeta,
+        interaction: Interaction,
+    ) -> ApplicationCommand:
+        options, resolved, command, guild = self._sanitize_data(data=data, command=command, interaction=interaction)
+
+        if data['type'] > 1:
+            # Not a slash command
+            self._parse_context_menu(
+                data=data,
+                resolved=resolved,
+                guild=guild,
+                interaction=interaction,
+            )
+            return command
+
+        for name, option in command.__class__.__application_command_options__.items():
+            setattr(command, name, option.default)  # For options that were not given
+
+        self._parse_options(options=options, resolved=resolved, command=command, guild=guild)
         return command
 
-    def dispatch(self, data: ApplicationCommandInteractionData, interaction: Interaction) -> None:
+    def _get_command(self, interaction: Interaction) -> ApplicationCommandMeta:
         try:
             command_factory = self.commands[interaction.command.id]
         except KeyError:
@@ -966,14 +1079,33 @@ class ApplicationCommandStore:
             except KeyError:
                 return  # Maybe raise an error here?
 
+        return command_factory
+
+    def dispatch(self, data: ApplicationCommandInteractionData, interaction: Interaction) -> None:
+        command_factory = self._get_command(interaction)
         kwargs = {'data': data, 'command': command_factory, 'interaction': interaction}
+
         try:
-            command = self._parse_options(**kwargs)
+            command = self._parse_application_command_options(**kwargs)
         except (KeyError, IndexError):
             raise IncompatibleCommandSignature(**kwargs)
 
         self.state.loop.create_task(
             self.invoke(command, interaction), name=f'discord-application-commands-dispatch-{interaction.id}'
+        )
+
+    def dispatch_autocomplete(self, data: ApplicationCommandInteractionData, interaction: Interaction) -> None:
+        command_factory = self._get_command(interaction)
+        kwargs = {'data': data, 'command': command_factory, 'interaction': interaction}
+
+        try:
+            command, option = self._parse_autocomplete_options(**kwargs)
+        except (KeyError, IndexError):
+            raise IncompatibleCommandSignature(**kwargs)
+
+        self.state.loop.create_task(
+            self.request_autocomplete_choices(command, option, interaction),
+            name=f'discord-application-commands-dispatch-{interaction.id}',
         )
 
 

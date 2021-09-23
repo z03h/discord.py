@@ -761,10 +761,13 @@ class ConnectionState:
         if data['type'] == 2:  # application command
             self._application_commands_store.dispatch(data['data'], interaction)
 
-        if data['type'] == 3:  # interaction component
+        elif data['type'] == 3:  # interaction component
             custom_id = interaction.data['custom_id']  # type: ignore
             component_type = interaction.data['component_type']  # type: ignore
             self._view_store.dispatch(component_type, custom_id, interaction)
+
+        elif data['type'] == 4:  # application command auto-complete
+            self._application_commands_store.dispatch_autocomplete(data['data'], interaction)
 
         self.dispatch('interaction', interaction)
 

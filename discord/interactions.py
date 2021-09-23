@@ -27,7 +27,7 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, NamedTuple, Optional, Type, TYPE_CHECKING, Tuple, TypeVar, Union
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Type, TYPE_CHECKING, Tuple, TypeVar, Union
 
 from . import utils
 from .mixins import Hashable
@@ -62,7 +62,10 @@ if TYPE_CHECKING:
         ApplicationCommandOption as ApplicationCommandOptionPayload,
     )
 
-    from .application_commands import ApplicationCommandOption as NativeCommandOption
+    from .application_commands import (
+        ApplicationCommandOption as NativeCommandOption,
+        ApplicationCommandOptionChoice as NativeCommandChoice,
+    )
     from .client import Client
     from .enums import (
         ApplicationCommandType,
@@ -81,6 +84,7 @@ if TYPE_CHECKING:
         VoiceChannel, StageChannel, TextChannel, CategoryChannel, StoreChannel, Thread, PartialMessageable
     ]
 
+    AutocompleteChoicesT = Union[Iterable[NativeCommandChoice], Iterable[str], Dict[str, str]]
     OptionT = TypeVar('OptionT', bound='ApplicationCommandOption')
 
 MISSING: Any = utils.MISSING
@@ -462,7 +466,8 @@ class Interaction:
     message: Optional[:class:`Message`]
         The message that sent this interaction.
     target: Optional[Union[:class:`User`, :class:`Member`, :class:`Message`]]
-        The resolved target user or message.
+        The resolved target user or message. Only applicable for context menus.
+
         This attribute is only resolved during application command option parsing.
     command: Optional[:class:`PartialApplicationCommand`]
         A partial representation of the command this interaction invoked.
@@ -474,6 +479,11 @@ class Interaction:
     client: :class:`Client`
         The client that dispatched the interaction.
         This is useful when handling interactions in a separate file.
+    value: Optional[:class:`str`]
+        The current text input to be used to find auto-complete choices.
+        Only applicable for auto-complete interactions.
+
+        This attribute is only resolved during application command option parsing.
     version: :class:`int`
         The auto-incrementing version identifier used by Discord.
     data: Dict[str, Any]
@@ -495,6 +505,7 @@ class Interaction:
         'token',
         'version',
         'client',
+        'value',
         '_permissions',
         '_state',
         '_session',
@@ -549,10 +560,11 @@ class Interaction:
         # application command data
         self.target_id: int = utils._get_as_snowflake(self.data, 'target_id')
         self.target: Optional[Union[User, Member, Message]] = None
+        self.value: Optional[str] = None
 
         self.command: Optional[PartialApplicationCommand]
 
-        if self.type is InteractionType.application_command:
+        if self.type is InteractionType.application_command or self.type is InteractionType.autocomplete:
             self.command = PartialApplicationCommand(
                 state=self._state,
                 type=try_enum(ApplicationCommandType, self.data['type']),
@@ -1031,6 +1043,60 @@ class InteractionResponse:
 
         if view and not view.is_finished():
             state.store_view(view, message_id)
+
+        self._responded = True
+
+    async def update_autocomplete_choices(self, choices: AutocompleteChoicesT) -> None:
+        """|coro|
+
+        Responds to an autocomplete interaction by populating it's choices.
+        There can be at most, 25 choices.
+
+        Parameters
+        ----------
+        choices
+            The choices to populate with.
+
+            Parameter can be an iterable of :class:`.application_commands.ApplicationCommandOptionChoice`,
+            an iterable of :class:`str`, or a dictionary mapping choice names to their return values.
+
+        Raises
+        -------
+        HTTPException
+             Updating autocomplete choices failed.
+        TypeError
+            This interaction is not an autocomplete interaction.
+        InteractionResponded
+            This interaction has already been responded to before.
+        """
+        parent = self._parent
+
+        if self._responded:
+            raise InteractionResponded(parent)
+
+        if parent.type is not InteractionType.application_command_autocomplete:
+            raise TypeError('interaction must be an autocomplete interaction to use this method.')
+
+        if isinstance(choices, dict):
+            payload = [{'name': k, 'value': v} for k, v in choices.items()]
+
+        elif isinstance(choices, Iterable):
+            payload = [
+                {'name': choice, 'value': choice} if isinstance(choice, str) else choice.to_dict()
+                for choice in choices
+            ]
+
+        else:
+            raise TypeError('invalid iterable')
+
+        adapter = async_context.get()
+        await adapter.create_interaction_response(
+            parent.id,
+            parent.token,
+            session=parent._session,
+            type=InteractionResponseType.autocomplete_result.value,
+            data={'choices': payload},
+        )
 
         self._responded = True
 
