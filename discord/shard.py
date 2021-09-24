@@ -348,6 +348,7 @@ class AutoShardedClient(Client):
         return AutoShardedConnectionState(
             dispatch=self.dispatch,
             handlers=self._handlers,
+            interaction_factory=self._interaction_factory,
             hooks=self._hooks,
             http=self.http,
             loop=self.loop,

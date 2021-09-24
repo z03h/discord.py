@@ -129,6 +129,11 @@ class ApplicationCommandOption(NamedTuple):
     options: Optional[List[:class:`.ApplicationCommandOption`]]
         The parameters/subcommands this option takes.
         ``None`` unless this has a ``type`` of ``subcommand`` or ``subcommand_group``.
+    channel_types: Optional[List[:class:`.ChannelType`]]
+        The channel types this option will only take.
+        ``None`` if it can take all channels, or if this option is not a ``CHANNEL`` option.
+    autocomplete: bool
+        Whether or not this option is an autocomplete option, where choices are dynamically populated.
     """
     type: ApplicationCommandOptionType
     name: str
@@ -136,31 +141,44 @@ class ApplicationCommandOption(NamedTuple):
     required: bool = False
     choices: Optional[List[ApplicationCommandOptionChoice]] = None
     options: Optional[List[ApplicationCommandOption]] = None
+    channel_types: Optional[List[ChannelType]] = None
+    autocomplete: bool = False
 
     @classmethod
     def from_dict(cls: Type[OptionT], data: ApplicationCommandOptionPayload) -> OptionT:
-        args = [
-            ApplicationCommandOptionType(data['type']),
-            data['name'],
-            data['description'],
-            data.get('required', False),
-        ]
+        kwargs = {
+            'type': ApplicationCommandOptionType(data['type']),
+            'name': data['name'],
+            'description': data['description'],
+            'required': data.get('required', False),
+            'choices': None,
+            'options': None,
+            'channel_types': None,
+            'autocomplete': data.get('autocomplete', False),
+        }
 
         if 'choices' in data:
-            args.append([
-                ApplicationCommandOptionChoice(**choice)
-                for choice in data['choices']
-            ])
-        else:
-            args.append(None)
+            kwargs['choices'] = [ApplicationCommandOptionChoice(**choice) for choice in data['choices']]
 
         if 'options' in data:
-            args.append([
-                ApplicationCommandOption.from_dict(option)
-                for option in data['options']
-            ])
+            kwargs['options'] = [ApplicationCommandOption.from_dict(option) for option in data['options']]
 
-        return cls(*args)
+        if 'channel_types' in data:
+            kwargs['channel_types'] = [try_enum(ChannelType, t) for t in data['channel_types']]
+
+        return cls(**kwargs)
+
+    def _match_key(self) -> Tuple[Any, ...]:
+        return (
+            self.type,
+            self.name,
+            self.description,
+            bool(self.required),
+            frozenset(option._match_key() for option in self.options) if self.options else None,
+            frozenset((choice.name, choice.value) for choice in self.choices) if self.choices else None,
+            frozenset(self.channel_types) if self.channel_types else None,
+            bool(self.autocomplete),
+        )
 
 
 class PartialApplicationCommand:
@@ -309,7 +327,7 @@ class ApplicationCommand(Hashable):
         self.guild_id = utils._get_as_snowflake(data, 'guild_id')
         self.application_id = utils._get_as_snowflake(data, 'application_id')
         self.default_permission = data.get('default_permission', True)
-        self.version = data['version']
+        self.version = int(data['version'])
 
         if 'options' in data:
             self.options = [
@@ -437,6 +455,15 @@ class ApplicationCommand(Hashable):
 
         await coro
         self._state.cached_application_commands.pop(self.id, None)
+
+    def _match_key(self) -> Tuple[Any, ...]:
+        return (
+            self.type,
+            self.name,
+            self.description,
+            self.default_permission,
+            frozenset(option._match_key() for option in self.options) if self.options else None,
+        )
 
 
 class Interaction:

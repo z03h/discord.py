@@ -371,6 +371,18 @@ class ApplicationCommandOption:
 
         return payload
 
+    def _match_key(self) -> Tuple[Any, ...]:
+        return (
+            self.type,
+            self.name,
+            self.description,
+            bool(self.required),
+            None,  # No children
+            frozenset((choice.name, choice.value) for choice in self.choices) if self.choices else None,
+            frozenset(self.channel_types) if self.channel_types else None,
+            bool(self._autocomplete_callback),
+        )
+
     def __repr__(self) -> str:
         return f'<ApplicationCommandOption type={self.type.name!r} name={self.name!r} required={self.required}>'
 
@@ -679,14 +691,16 @@ class ApplicationCommandMeta(type):
         if name is MISSING:
             name = cls_name
 
-        if description is MISSING:
+        if description is MISSING and type is ApplicationCommandType.chat_input:
             try:
                 description = inspect.cleandoc(attrs['__doc__'])
             except (AttributeError, KeyError):  # AttributeError if docstring is None
-                raise TypeError('application commands must have a description.')
+                raise TypeError('chat input commands must have a description.')
 
         if type is ApplicationCommandType.chat_input:
             name = name.casefold()
+        else:
+            description = MISSING
 
         attrs.update(
             __application_command_type__=type,
@@ -715,7 +729,7 @@ class ApplicationCommandMeta(type):
 
         return cls
 
-    def to_option_dict(cls) -> ApplicationCommandOptionPayload:
+    def to_option_dict(cls, *, match: bool = False) -> ApplicationCommandOptionPayload:
         payload = {
             'name': cls.__application_command_name__,
             'description': cls.__application_command_description__,
@@ -724,12 +738,12 @@ class ApplicationCommandMeta(type):
 
         if len(children := cls.__application_command_children__):
             option_type = ApplicationCommandOptionType.subcommand_group
-            payload['options'] += [command.to_option_dict() for command in children.values()]
+            payload['options'].extend(command.to_option_dict() for command in children.values())
         else:
             option_type = ApplicationCommandOptionType.subcommand
 
         if len(options := cls.__application_command_options__):
-            payload['options'] += [option.to_dict() for option in options.values()]
+            payload['options'].extend(option.to_dict() for option in options.values())
 
         if not payload['options']:
             del payload['options']
@@ -749,15 +763,52 @@ class ApplicationCommandMeta(type):
             payload['description'] = cls.__application_command_description__
 
         if len(children := cls.__application_command_children__):
-            payload['options'] += [command.to_option_dict() for command in children.values()]
+            payload['options'].extend(command.to_option_dict() for command in children.values())
 
         if len(options := cls.__application_command_options__):
-            payload['options'] += [option.to_dict() for option in options.values()]
+            payload['options'].extend(option.to_dict() for option in options.values())
 
         if not payload['options']:
             del payload['options']
 
         return payload
+
+    def _match_key(cls) -> Tuple[Any, ...]:
+        options = []
+
+        if len(children := cls.__application_command_children__):
+            options.extend(command._option_match_key() for command in children.values())
+
+        if len(options_ := cls.__application_command_options__):
+            options.extend(option._match_key() for option in options_.values())
+
+        return (
+            cls.__application_command_type__,
+            cls.__application_command_name__,
+            cls.__application_command_description__ or '',
+            bool(cls.__application_command_default_permission__),
+            frozenset(options) if options else None,
+        )
+
+    def _option_match_key(cls) -> Tuple[Any, ...]:
+        options = []
+
+        if has_children := len(children := cls.__application_command_children__):
+            options.extend(command._option_match_key() for command in children.values())
+
+        if len(options_ := cls.__application_command_options__):
+            options.extend(option._match_key() for option in options_.values())
+
+        return (
+            ApplicationCommandOptionType.subcommand_group if has_children else ApplicationCommandOptionType.subcommand,
+            cls.__application_command_name__,
+            cls.__application_command_description__ or '',
+            False,
+            frozenset(options) if options else None,
+            None,
+            None,
+            False,
+        )
 
 
 class ApplicationCommand(metaclass=ApplicationCommandMeta):

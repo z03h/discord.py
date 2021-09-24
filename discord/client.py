@@ -510,11 +510,11 @@ class Client:
         data = await self.http.static_login(token.strip())
         self._connection.user = ClientUser(state=self._connection, data=data)
 
-        if self._update_commands_at_startup:
-            await self.update_application_commands()
-
         if self._fetch_commands_at_startup:
             await self.fetch_application_commands()
+
+        if self._update_commands_at_startup:
+            await self.update_application_commands()
 
     async def connect(self, *, reconnect: bool = True) -> None:
         """|coro|

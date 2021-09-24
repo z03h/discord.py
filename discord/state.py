@@ -53,7 +53,7 @@ from .flags import ApplicationFlags, Intents, MemberCacheFlags
 from .object import Object
 from .invite import Invite
 from .integrations import _integration_factory
-from .interactions import Interaction, ApplicationCommand
+from .interactions import Interaction, ApplicationCommand, ApplicationCommandOption
 from .ui.view import ViewStore, View
 from .stage_instance import StageInstance
 from .threads import Thread, ThreadMember
@@ -61,7 +61,7 @@ from .sticker import GuildSticker
 
 if TYPE_CHECKING:
     from .abc import PrivateChannel
-    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand, ApplicationCommandPool
+    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand, ApplicationCommandOption as NativeCommandOption
     from .message import MessageableChannel
     from .guild import GuildChannel, VocalGuildChannel
     from .http import HTTPClient
@@ -233,6 +233,7 @@ class ConnectionState:
         self._queued_guild_application_commands: Dict[int, Dict[str, NativeApplicationCommand]] = defaultdict(dict)
 
         self.cached_application_commands: Dict[int, ApplicationCommand] = {}
+        self.cached_application_commands_by_name: Dict[Tuple[str, Optional[int]], ApplicationCommand] = {}
 
         if not intents.members or cache_flags._empty:
             self.store_user = self.create_user  # type: ignore
@@ -494,6 +495,7 @@ class ConnectionState:
     def add_application_command(self, data: ApplicationCommandPayload) -> ApplicationCommand:
         command = ApplicationCommand(data=data, state=self)
         self.cached_application_commands[command.id] = command
+        self.cached_application_commands_by_name[command.name, command.guild_id] = command
         return command
 
     async def chunker(
@@ -521,12 +523,23 @@ class ConnectionState:
             _log.warning('Timed out waiting for chunks with query %r and limit %d for guild_id %d', query, limit, guild_id)
             raise
 
+    def _is_application_command_match(self, native: NativeApplicationCommand, guild_id: int = None) -> bool:
+        try:
+            stored = self.cached_application_commands_by_name[native.__application_command_name__, guild_id]
+        except KeyError:
+            return False
+
+        return stored._match_key() == native._match_key()
+
     async def update_global_application_commands(self) -> None:
         payload = [
             command.to_dict()
             for command in self._queued_global_application_commands.values()
             if not command.__application_command_parent__
         ]
+        if not payload:
+            return
+
         response = await self.http.bulk_upsert_global_commands(self.self_id or self.application_id, payload)
 
         for data in response:
@@ -540,6 +553,9 @@ class ConnectionState:
         queue = self._queued_guild_application_commands[guild_id]
 
         payload = [command.to_dict() for command in queue.values() if not command.__application_command_parent__]
+        if not payload:
+            return
+
         response = await self.http.bulk_upsert_guild_commands(self.self_id or self.application_id, guild_id, payload)
 
         for data in response:
@@ -550,11 +566,9 @@ class ConnectionState:
 
     async def update_application_commands(self) -> None:
         for guild_id, value in self._queued_guild_application_commands.items():
-            if len(value):
-                await self.update_guild_application_commands(guild_id)
+            await self.update_guild_application_commands(guild_id)
 
-        if len(self._queued_global_application_commands):
-            await self.update_global_application_commands()
+        await self.update_global_application_commands()
 
     async def _delay_ready(self) -> None:
         try:
