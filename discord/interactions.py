@@ -53,6 +53,7 @@ __all__ = (
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from aiohttp import ClientSession
 
     from .types.interactions import (
@@ -601,6 +602,11 @@ class Interaction:
             )
         else:
             self.command = None
+
+    @property
+    def created_at(self) -> datetime:
+        """:class:`datetime.datetime`: When this interaction was created in UTC."""
+        return utils.snowflake_time(self.id)
 
     @property
     def guild(self) -> Optional[Guild]:
