@@ -884,16 +884,9 @@ class ApplicationCommandStore:
     def __init__(self, state: ConnectionState) -> None:
         self.state: ConnectionState = state
         self.commands: Dict[int, ApplicationCommandMeta] = {}
-        self.commands_by_name: Dict[Tuple[str, int], ApplicationCommandMeta] = {}
 
     def store_command(self, id: int, command: ApplicationCommandMeta) -> None:
         self.commands[id] = command
-
-    def store_command_named(self, command: ApplicationCommandMeta) -> None:
-        self.commands_by_name[
-            command.__application_command_name__,
-            command.__application_command_guild_id__ or None,
-        ] = command
 
     async def _handle_error(
         self,
@@ -1120,18 +1113,10 @@ class ApplicationCommandStore:
 
     def _get_command(self, interaction: Interaction) -> ApplicationCommandMeta:
         try:
-            command_factory = self.commands[interaction.command.id]
+            return self.commands[interaction.command.id]
         except KeyError:
-            try:
-                command_factory = self.commands_by_name[
-                    interaction.command.name,
-                    interaction.command.resolved and interaction.command.resolved.guild_id,
-                ]  # Currently this will fail for guild commands if application commands aren't cached.
-            except KeyError:
-                message = f'Received command {interaction.command.name!r} with ID {interaction.command.id}, but it is not stored'
-                raise ValueError(message) from None  # TODO: Custom exception here
-
-        return command_factory
+            message = f'Received command {interaction.command.name!r} with ID {interaction.command.id}, but it is not stored'
+            raise ValueError(message) from None  # TODO: Custom exception here
 
     def dispatch(self, data: ApplicationCommandInteractionData, interaction: Interaction) -> None:
         command_factory = self._get_command(interaction)

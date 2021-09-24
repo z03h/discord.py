@@ -1635,6 +1635,16 @@ class Client:
         data = await state.http.start_private_message(user.id)
         return state.add_dm_channel(data)
 
+    def _store_commands(self, commands: List[NativeApplicationCommand], guild_id: int = None) -> None:
+        for command in commands:
+            key = command.__application_command_name__, guild_id
+            try:
+                id = self._connection.cached_application_commands_by_name[key].id
+            except KeyError:
+                continue
+            else:
+                self._connection._application_commands_store.store_command(id, command)
+
     # The "guild_ids" parameter was removed in order to discourage API abuse (Each guild would mean another API call)
     def add_application_command(self, command: NativeApplicationCommand, *, guild_id: int = MISSING) -> None:
         """Queues an application command to be eventually added.
@@ -1658,6 +1668,7 @@ class Client:
             return
 
         self._connection._queued_guild_application_commands[guild_id][command.__application_command_name__] = command
+        self._store_commands([command], guild_id or None)
 
     def add_application_commands(self, *commands: NativeApplicationCommand, guild_id: int = MISSING) -> None:
         """Queues multiple application commands at once to be eventually added.
@@ -1683,49 +1694,16 @@ class Client:
         tree: :class:`.application_commands.ApplicationCommandTree`
             The command tree to add.
         """
-        self._connection._queued_global_application_commands.update({
-            command.__application_command_name__: command for command in tree._global_commands
-        })
+        self._connection._queued_global_application_commands.update(
+            {command.__application_command_name__: command for command in tree._global_commands}
+        )
+        self._store_commands(tree._global_commands)
 
         for guild_id, commands in tree._guild_commands.items():
-            self._connection._queued_guild_application_commands[guild_id].update({
-                command.__application_command_name__: command for command in commands
-            })
-
-    def store_application_command(self, id: int, command: NativeApplicationCommand) -> None:
-        """Stores and starts listening to an application command. This does not enqueue the command.
-
-        Parameters
-        ----------
-        id: int
-            The ID of the command to listen for.
-        command: Type[:class:`.application_commands.ApplicationCommand`]
-            The command callback class that should be used when the command is invoked.
-        """
-        self._connection._application_commands_store.store_command(id, command)
-
-    def store_application_command_by_name(self, command: NativeApplicationCommand) -> None:
-        """Stores and starts listening to an application command solely by it's name.
-
-        See :meth:`.Client.store_application_command` for a more reliable alternative.
-
-        Parameters
-        ----------
-        command: Type[:class:`.application_commands.ApplicationCommand`]
-            The command callback class that should be used when the command is invoked.
-        """
-        self._connection._application_commands_store.store_command_named(command)
-
-    def store_application_command_tree(self, tree: ApplicationCommandTree) -> None:
-        """Stores and starts listening to an entire application command tree.
-
-        Parameters
-        ----------
-        tree: :class:`.application_commands.ApplicationCommandTree`
-            The command tree to store.
-        """
-        for command in tree.commands:
-            self.store_application_command_by_name(command)
+            self._connection._queued_guild_application_commands[guild_id].update(
+                {command.__application_command_name__: command for command in commands}
+            )
+            self._store_commands(commands, guild_id)
 
     async def fetch_application_commands(self, application_id: int = None, *, guild_id: int = None) -> List[ApplicationCommand]:
         """|coro|
