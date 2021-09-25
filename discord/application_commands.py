@@ -1073,11 +1073,6 @@ class ApplicationCommandStore:
     ) -> Tuple[ApplicationCommand, ApplicationCommandOption]:
         options, resolved, command, guild = self._sanitize_data(data=data, command=command, interaction=interaction)
 
-        for option in options:
-            if option.get('focused'):
-                interaction.value = option['value']
-                break
-
         option = find(lambda o: o.get('focused'), options)
         interaction.value = option['value']
 
