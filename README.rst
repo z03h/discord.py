@@ -13,35 +13,32 @@ discord.py
 
 A modern, easy to use, feature-rich, and async ready API wrapper for Discord written in Python.
 
-What this fork adds
--------------------
-This fork simply implements Danny's `slash command DSL <https://gist.github.com/Rapptz/2a7a299aa075427357e9b8a970747c2c>`_ (The class based version).
+Welcome to my spoon of discord.py
+---------------------------------
 
-Differences between the DSL and this fork
+It was originally made to implement Danny's
+`slash command DSL <https://gist.github.com/Rapptz/2a7a299aa075427357e9b8a970747c2c>`_ (The class based version),
+and it does it pretty well, although I still need to decide what happens with naming conflicts.
+
+There have been many changes since this DSL was created however, for example slash commands turning
+into a category of "application commands". These "application commands" also contain "context menus",
+specifically referred to as "message commands" and "user commands". This spoon™ does, in fact, support them.
+
+As a result of this, naming schemes that go along "slash command" have been renamed to their counterparts
+that go along with "application_command". This unfortunately does make things a bit verbose, however
+shortening the names would leave name conflicts and confusion.
+
+Everything that this spoon™ adds/supports
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- Application commands
 
-There were some modifications to the slash commands API since the DSL was created.
-Therefore, there are some key differences between the DSL and what is in this fork:
+  - Slash commands
+  - Context menus (Message commands & user commands)
+  - ``channel_types`` option field
+  - Autocomplete options
 
-- Slash commands are now a type of "application command" in Discord's API. (This was because of context menus.)
-  Therefore, some names have been changed to be consistent with the API.
-
-  - ``SlashCommand`` has been renamed to ``ApplicationCommand``
-  - The namespace ``discord.slash`` has been renamed to ``discord.application_commands``.
-  - ``argument`` is now ``option``. (``slash.argument`` -> ``application_commands.option``)
-
-- The name for the command callback function is now ``callback`` instead of ``run``.
-  This was to keep it consistent with the UI module.
-
-Notes
-~~~~~
-
-- ``discord.ApplicationCommand`` is not to be confused with ``discord.application_commands.ApplicationCommand``.
-  ``discord.application_commands.ApplicationCommand`` is the one you construct yourself, and
-  ``discord.ApplicationCommand`` is the one that is retrieved from Discord's API (E.g. fetching commands from a guild)
-
-- Although ``discord.application_commands`` is extremely verbose in my opinion, no other names seemed better to me.
-  Moving it to the module level would have conflicts.
+- Role icons
+- Welcome screens (in which is *not* NC's PR)
 
 Key Features
 -------------
