@@ -2391,6 +2391,8 @@ class Guild(Hashable):
         name: str = ...,
         permissions: Permissions = ...,
         colour: Union[Colour, int] = ...,
+        icon: bytes = ...,
+        unicode_emoji: Any = ...,
         hoist: bool = ...,
         mentionable: bool = ...,
     ) -> Role:
@@ -2404,6 +2406,8 @@ class Guild(Hashable):
         name: str = ...,
         permissions: Permissions = ...,
         color: Union[Colour, int] = ...,
+        icon: bytes = ...,
+        unicode_emoji: Any = ...,
         hoist: bool = ...,
         mentionable: bool = ...,
     ) -> Role:
@@ -2416,6 +2420,8 @@ class Guild(Hashable):
         permissions: Permissions = MISSING,
         color: Union[Colour, int] = MISSING,
         colour: Union[Colour, int] = MISSING,
+        icon: bytes = MISSING,
+        unicode_emoji: Any = MISSING,
         hoist: bool = MISSING,
         mentionable: bool = MISSING,
         reason: Optional[str] = None,
@@ -2441,6 +2447,16 @@ class Guild(Hashable):
         colour: Union[:class:`Colour`, :class:`int`]
             The colour for the role. Defaults to :meth:`Colour.default`.
             This is aliased to ``color`` as well.
+        icon: Optional[:class:`bytes`]
+            The icon of the role, which will be shown next to users that have this role.
+            Your server must have ``ROLE_ICONS`` in it's :attr:`~Guild.features` in order to use this parameter.
+
+            .. versionadded:: 2.0
+        unicode_emoji: Optional[Union[:class:`str`, :class:`PartialEmoji`]]
+            The unicode emoji of the role, which will be shown next to users that have this role.
+            Your server must have ``ROLE_ICONS`` in it's :attr:`~Guild.features` in order to use this parameter.
+
+            .. versionadded:: 2.0
         hoist: :class:`bool`
             Indicates if the role should be shown separately in the member list.
             Defaults to ``False``.
@@ -2485,10 +2501,15 @@ class Guild(Hashable):
         if name is not MISSING:
             fields['name'] = name
 
+        if icon is not MISSING:
+            fields['icon'] = utils._bytes_to_base64_data(icon)
+
+        if unicode_emoji is not MISSING:
+            fields['unicode_emoji'] = utils._bytes_to_base64_data(str(unicode_emoji))
+
         data = await self._state.http.create_role(self.id, reason=reason, **fields)
         role = Role(guild=self, data=data, state=self._state)
-
-        # TODO: add to cache
+        self._roles[role.id] = role
         return role
 
     async def edit_role_positions(self, positions: Dict[Snowflake, int], *, reason: Optional[str] = None) -> List[Role]:

@@ -169,6 +169,11 @@ class Role(Hashable):
         integrations such as Twitch.
     mentionable: :class:`bool`
         Indicates if the role can be mentioned by users.
+    unicode_emoji: Optional[:class:`str`]
+        The unicode emoji that is displayed next to members that have this role,
+        ``None`` if this role does not have one.
+
+        .. versionadded:: 2.0
     tags: Optional[:class:`RoleTags`]
         The role tags associated with this role.
     """
@@ -179,6 +184,7 @@ class Role(Hashable):
         '_permissions',
         '_colour',
         '_icon',
+        'unicode_emoji',
         'position',
         'managed',
         'mentionable',
@@ -245,6 +251,7 @@ class Role(Hashable):
         self.managed: bool = data.get('managed', False)
         self.mentionable: bool = data.get('mentionable', False)
         self._icon: Optional[str] = data.get('icon')
+        self.unicode_emoji: Optional[str] = data.get('unicode_emoji')
         self.tags: Optional[RoleTags]
 
         try:
@@ -302,7 +309,8 @@ class Role(Hashable):
 
     @property
     def icon(self) -> Optional[Asset]:
-        """Optional[:class:`Asset`]: The role's icon, ``None`` if the role does not have one.
+        """Optional[:class:`Asset`]: The asset representing the icon that is displayed next to members that have this role,
+        ``None`` if this role does not have one.
 
         .. versionadded:: 2.0
         """
@@ -359,6 +367,7 @@ class Role(Hashable):
         colour: Union[Colour, int] = MISSING,
         color: Union[Colour, int] = MISSING,
         icon: bytes = MISSING,
+        unicode_emoji: Any = MISSING,
         hoist: bool = MISSING,
         mentionable: bool = MISSING,
         position: int = MISSING,
@@ -387,9 +396,15 @@ class Role(Hashable):
             The new permissions to change to.
         colour: Union[:class:`Colour`, :class:`int`]
             The new colour to change to. (aliased to color as well)
-        icon: :class:`bytes`
+        icon: Optional[:class:`bytes`]
             A :term:`py:bytes-like object` representing the new role icon. Only PNG, JPEG, and WebP is supported.
             Could be ``None`` to denote removal of the icon.
+
+            .. versionadded:: 2.0
+        unicode_emoji: Optional[Union[:class:`str`, :class:`PartialEmoji`]]
+            The new unicode emoji of this role. Could be ``None`` to denote removal of the emoji.
+
+            .. versionadded:: 2.0
         hoist: :class:`bool`
             Indicates if the role should be shown separately in the member list.
         mentionable: :class:`bool`
@@ -440,6 +455,12 @@ class Role(Hashable):
             else:
                 payload['icon'] = _bytes_to_base64_data(icon)
 
+        if unicode_emoji is not MISSING:
+            if unicode_emoji is None:
+                payload['unicode_emoji'] = None
+            else:
+                payload['unicode_emoji'] = str(unicode_emoji)
+
         if hoist is not MISSING:
             payload['hoist'] = hoist
 
@@ -454,12 +475,12 @@ class Role(Hashable):
 
         Deletes the role.
 
-        You must have the :attr:`~Permissions.manage_roles` permission to
+        You must have the :attr:`~Permissi
+        reason: Optional[:class:`str`]ons.manage_roles` permission to
         use this.
 
         Parameters
         -----------
-        reason: Optional[:class:`str`]
             The reason for deleting this role. Shows up on the audit log.
 
         Raises

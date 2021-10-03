@@ -573,10 +573,26 @@ class Member(discord.abc.Messageable, _UserTag):
         hierarchy chain.
         """
         guild = self.guild
-        if len(self._roles) == 0:
+        if not self._roles:
             return guild.default_role
 
         return max(guild.get_role(rid) or guild.default_role for rid in self._roles)
+
+    @property
+    def role_icon(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the role icon that is displayed next to this member's name,
+        and ``None`` if no icon is displayed.
+
+        .. versionadded:: 2.0
+        """
+        if not self._roles:
+            return None
+
+        for role in reversed(self.roles):
+            if icon := role.icon:
+                return icon
+
+        return None  # Unnecessary but more readable
 
     @property
     def guild_permissions(self) -> Permissions:
