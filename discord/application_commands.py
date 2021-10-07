@@ -1123,7 +1123,7 @@ class ApplicationCommandStore:
             except (KeyError, IndexError):
                 raise IncompatibleCommandSignature(**kwargs)
         except Exception as exc:
-            return self.state.dispatch('error', exc)
+            return self.state.dispatch('application_command_error', interaction, exc)
 
         self.state.loop.create_task(
             self.invoke(command, interaction), name=f'discord-application-commands-dispatch-{interaction.id}'
@@ -1139,7 +1139,7 @@ class ApplicationCommandStore:
             except (KeyError, IndexError):
                 raise IncompatibleCommandSignature(**kwargs)
         except Exception as exc:
-            return self.state.dispatch('error', exc)
+            return self.state.dispatch('application_command_error', interaction, exc)
 
         self.state.loop.create_task(
             self.request_autocomplete_choices(command, option, interaction),
