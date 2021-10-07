@@ -934,8 +934,8 @@ class ApplicationCommandStore:
         except Exception as exc:
             return await self._handle_error(command, interaction, exc)
 
+    @staticmethod
     def _sanitize_command(
-        self,
         *,
         options: Sequence[ApplicationCommandInteractionDataOption],
         command: ApplicationCommandMeta,
@@ -1111,29 +1111,35 @@ class ApplicationCommandStore:
             return self.commands[interaction.command.id]
         except KeyError:
             message = f'Received command {interaction.command.name!r} with ID {interaction.command.id}, but it is not stored'
-            raise ValueError(message) from None  # TODO: Custom exception here
+            raise RuntimeError(message) from None
 
     def dispatch(self, data: ApplicationCommandInteractionData, interaction: Interaction) -> None:
-        command_factory = self._get_command(interaction)
-        kwargs = {'data': data, 'command': command_factory, 'interaction': interaction}
-
         try:
-            command = self._parse_application_command_options(**kwargs)
-        except (KeyError, IndexError):
-            raise IncompatibleCommandSignature(**kwargs)
+            command_factory = self._get_command(interaction)
+            kwargs = {'data': data, 'command': command_factory, 'interaction': interaction}
+
+            try:
+                command = self._parse_application_command_options(**kwargs)
+            except (KeyError, IndexError):
+                raise IncompatibleCommandSignature(**kwargs)
+        except Exception as exc:
+            return self.state.dispatch('error', exc)
 
         self.state.loop.create_task(
             self.invoke(command, interaction), name=f'discord-application-commands-dispatch-{interaction.id}'
         )
 
     def dispatch_autocomplete(self, data: ApplicationCommandInteractionData, interaction: Interaction) -> None:
-        command_factory = self._get_command(interaction)
-        kwargs = {'data': data, 'command': command_factory, 'interaction': interaction}
-
         try:
-            command, option = self._parse_autocomplete_options(**kwargs)
-        except (KeyError, IndexError):
-            raise IncompatibleCommandSignature(**kwargs)
+            command_factory = self._get_command(interaction)
+            kwargs = {'data': data, 'command': command_factory, 'interaction': interaction}
+
+            try:
+                command, option = self._parse_autocomplete_options(**kwargs)
+            except (KeyError, IndexError):
+                raise IncompatibleCommandSignature(**kwargs)
+        except Exception as exc:
+            return self.state.dispatch('error', exc)
 
         self.state.loop.create_task(
             self.request_autocomplete_choices(command, option, interaction),
