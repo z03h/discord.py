@@ -761,7 +761,7 @@ class HTTPClient:
         *,
         reason: Optional[str] = None,
     ) -> Response[member.Nickname]:
-        r = Route('PATCH', '/guilds/{guild_id}/members/@me/nick', guild_id=guild_id)
+        r = Route('PATCH', '/guilds/{guild_id}/members/@me', guild_id=guild_id)
         payload = {
             'nick': nickname,
         }
