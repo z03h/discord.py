@@ -55,6 +55,9 @@ __all__ = (
     'InteractionType',
     'InteractionResponseType',
     'NSFWLevel',
+    'ApplicationCommandType',
+    'ApplicationCommandOptionType',
+    'ApplicationCommandPermissionType',
 )
 
 
@@ -209,9 +212,10 @@ class MessageType(Enum):
     guild_discovery_grace_period_final_warning = 17
     thread_created = 18
     reply = 19
-    application_command = 20
+    chat_input_command = 20
     thread_starter_message = 21
     guild_invite_reminder = 22
+    context_menu_command = 23
 
 
 class VoiceRegion(Enum):
@@ -587,6 +591,51 @@ class NSFWLevel(Enum, comparable=True):
     explicit = 1
     safe = 2
     age_restricted = 3
+
+
+class ApplicationCommandType(Enum):
+    chat = 1
+    user = 2
+    message = 3
+
+    # aliases
+    slash = 1
+
+    def __int__(self):
+        return self.value
+
+
+class ApplicationCommandOptionType(Enum):
+    sub_command = 1
+    sub_command_group = 2
+    string = 3
+    integer = 4
+    boolean = 5
+    user = 6
+    channel = 7
+    role = 8
+    mentionable = 9
+    number = 10
+
+    # Aliases for python types
+    # and alt names
+    subcommand = 1
+    subcommand_group = 2
+    str = 3
+    int = 4
+    bool = 5
+    float = 10
+
+    def __int__(self):
+        return self.value
+
+
+class ApplicationCommandPermissionType(Enum):
+    role = 1
+    user = 2
+
+    def __int__(self):
+        return self.value
 
 
 T = TypeVar('T')
