@@ -846,7 +846,7 @@ class HelpCommand:
         # Since we want to have detailed errors when someone
         # passes an invalid subcommand, we need to walk through
         # the command group chain ourselves.
-        keys = command.split(' ')
+        keys = command.split()
         cmd = bot.all_commands.get(keys[0])
         if cmd is None:
             string = await maybe_coro(self.command_not_found, self.remove_mentions(keys[0]))
