@@ -323,6 +323,12 @@ class Role(Hashable):
         return [member for member in all_members if member._roles.has(role_id)]
 
     @property
+    def display_icon(self) -> Optional[Union[Asset, str]]:
+        """Optional[Union[:class:`Asset`, :class:`str`]]: Returns the role's icon
+        or unicode emoji if available."""
+        return self.icon or self._emoji
+
+    @property
     def icon(self) -> Optional[Asset]:
         """Optional[:class:`Asset`]: Returns the role's icon asset, if available."""
         if self._icon is None:
