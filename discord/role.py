@@ -25,11 +25,12 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, TypeVar, Union, overload, TYPE_CHECKING
 
+from .asset import Asset
 from .permissions import Permissions
 from .errors import InvalidArgument
 from .colour import Colour
 from .mixins import Hashable
-from .utils import snowflake_time, _get_as_snowflake, MISSING
+from .utils import snowflake_time, _get_as_snowflake, _bytes_to_base64_data, MISSING
 
 __all__ = (
     'RoleTags',
@@ -183,6 +184,8 @@ class Role(Hashable):
         'hoist',
         'guild',
         'tags',
+        '_icon',
+        '_emoji',
         '_state',
     )
 
@@ -243,6 +246,8 @@ class Role(Hashable):
         self.managed: bool = data.get('managed', False)
         self.mentionable: bool = data.get('mentionable', False)
         self.tags: Optional[RoleTags]
+        self._icon = data.get('icon')
+        self._emoji = data.get('unicode_emoji')
 
         try:
             self.tags = RoleTags(data['tags'])
@@ -317,6 +322,22 @@ class Role(Hashable):
         role_id = self.id
         return [member for member in all_members if member._roles.has(role_id)]
 
+    @property
+    def icon(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the role's icon asset, if available."""
+        if self._icon is None:
+            return None
+
+        if isinstance(self._icon, str):
+            return self._icon
+
+        return Asset._from_role_icon(self._state, self.id, self._icon)
+
+    @property
+    def emoji(self) -> Optional[str]:
+        """Optional[:class:`str`]: Returns the role's unicode emoji, if available."""
+        return self._emoji
+
     async def _move(self, position: int, reason: Optional[str]) -> None:
         if position <= 0:
             raise InvalidArgument("Cannot move role to position 0 or below")
@@ -351,6 +372,8 @@ class Role(Hashable):
         mentionable: bool = MISSING,
         position: int = MISSING,
         reason: Optional[str] = MISSING,
+        icon: Optional[bytes] = MISSING,
+        emoji: Optional[str] = MISSING
     ) -> Optional[Role]:
         """|coro|
 
@@ -382,6 +405,10 @@ class Role(Hashable):
         position: :class:`int`
             The new role's position. This must be below your top role's
             position or it will fail.
+        icon: :class:`bytes`
+            The role's new icon. ``None`` to remove.
+        emoji: :class:`str`
+            The role's new unicode emoji. ``None`` to remove.
         reason: Optional[:class:`str`]
             The reason for editing this role. Shows up on the audit log.
 
@@ -412,6 +439,15 @@ class Role(Hashable):
                 payload['color'] = colour
             else:
                 payload['color'] = colour.value
+
+        if icon is not MISSING:
+            if icon is None:
+                payload['icon'] = icon
+            else:
+                payload['icon'] = _bytes_to_base64_data(icon)
+
+        if emoji is not MISSING:
+            payload['unicode_emoji'] = emoji
 
         if name is not MISSING:
             payload['name'] = name

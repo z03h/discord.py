@@ -2395,6 +2395,8 @@ class Guild(Hashable):
         colour: Union[Colour, int] = ...,
         hoist: bool = ...,
         mentionable: bool = ...,
+        icon: bytes = ...,
+        emoji: str = ...,
     ) -> Role:
         ...
 
@@ -2408,6 +2410,8 @@ class Guild(Hashable):
         color: Union[Colour, int] = ...,
         hoist: bool = ...,
         mentionable: bool = ...,
+        icon: bytes = ...,
+        emoji: str = ...,
     ) -> Role:
         ...
 
@@ -2420,6 +2424,8 @@ class Guild(Hashable):
         colour: Union[Colour, int] = MISSING,
         hoist: bool = MISSING,
         mentionable: bool = MISSING,
+        icon: bytes = MISSING,
+        emoji: str = MISSING,
         reason: Optional[str] = None,
     ) -> Role:
         """|coro|
@@ -2449,6 +2455,10 @@ class Guild(Hashable):
         mentionable: :class:`bool`
             Indicates if the role should be mentionable by others.
             Defaults to ``False``.
+        icon: :class:`bytes`
+            Icon to create the role with.
+        emoji: :class:`str`
+            The unicode emoji to create the role with.
         reason: Optional[:class:`str`]
             The reason for creating this role. Shows up on the audit log.
 
@@ -2486,6 +2496,14 @@ class Guild(Hashable):
 
         if name is not MISSING:
             fields['name'] = name
+
+        if icon is not MISSING:
+            if isinstance(icon, bytes):
+                fields['icon'] = utils._bytes_to_base64_data(icon)
+
+        if emoji is not MISSING:
+            if isinstance(emoji, str):
+                fields['unicode_emoji'] = emoji
 
         data = await self._state.http.create_role(self.id, reason=reason, **fields)
         role = Role(guild=self, data=data, state=self._state)
