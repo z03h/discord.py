@@ -1825,7 +1825,7 @@ def has_role(item: Union[int, str]) -> Callable[[T], T]:
 
         # ctx.guild is None doesn't narrow ctx.author to Member
         if isinstance(item, int):
-            role = discord.utils.get(ctx.author.roles, id=item)  # type: ignore
+            role = ctx.author.get_role(item) # type: ignore
         else:
             role = discord.utils.get(ctx.author.roles, name=item)  # type: ignore
         if role is None:
@@ -1897,7 +1897,7 @@ def bot_has_role(item: int) -> Callable[[T], T]:
 
         me = ctx.me
         if isinstance(item, int):
-            role = discord.utils.get(me.roles, id=item)
+            role = me.get_role(item)
         else:
             role = discord.utils.get(me.roles, name=item)
         if role is None:
