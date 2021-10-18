@@ -1871,7 +1871,7 @@ def has_any_role(*items: Union[int, str]) -> Callable[[T], T]:
 
         # ctx.guild is None doesn't narrow ctx.author to Member
         getter = functools.partial(discord.utils.get, ctx.author.roles)  # type: ignore
-        if any(getter(id=item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
+        if any((ctx.author.get_role(item) if isinstance(item, int) else getter(name=item)) is not None for item in items):
             return True
         raise MissingAnyRole(list(items))
 
@@ -1924,7 +1924,7 @@ def bot_has_any_role(*items: int) -> Callable[[T], T]:
 
         me = ctx.me
         getter = functools.partial(discord.utils.get, me.roles)
-        if any(getter(id=item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
+        if any((me.get_role(item) if isinstance(item, int) else getter(name=item)) is not None for item in items):
             return True
         raise BotMissingAnyRole(list(items))
     return check(predicate)
