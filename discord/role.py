@@ -334,9 +334,6 @@ class Role(Hashable):
         if self._icon is None:
             return None
 
-        if isinstance(self._icon, str):
-            return self._icon
-
         return Asset._from_role_icon(self._state, self.id, self._icon)
 
     @property
