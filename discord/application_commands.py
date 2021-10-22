@@ -303,6 +303,8 @@ class ApplicationCommandOption:
     required: bool = False
     choices: List[ApplicationCommandOptionChoice] = MISSING
     channel_types: List[ChannelType] = MISSING
+    min_value: float = MISSING
+    max_value: float = MISSING
     default: Any = MISSING
     _autocomplete_callback: AutocompleteCallbackT = MISSING
 
@@ -369,6 +371,12 @@ class ApplicationCommandOption:
         if self._autocomplete_callback is not MISSING:
             payload['autocomplete'] = True
 
+        if self.min_value is not MISSING:
+            payload['min_value'] = self.min_value
+
+        if self.max_value is not MISSING:
+            payload['max_value'] = self.max_value
+
         return payload
 
     def _match_key(self) -> Tuple[Any, ...]:
@@ -396,6 +404,8 @@ def option(
     optional: bool = MISSING,
     choices: ApplicationCommandOptionChoiceT = MISSING,
     channel_types: Iterable[ChannelType] = MISSING,
+    min_value: float = MISSING,
+    max_value: float = MISSING,
     default: Any = None,
 ) -> ApplicationCommandOption:
     """Creates an application command option which can be used on :class:`.ApplicationCommand`.
@@ -423,7 +433,17 @@ def option(
         An iterable of all the channel types this option will take.
         Defaults to taking all channel types.
 
-        Only applicable if the ``type`` is ``channel``.
+        Only applicable for ``channel`` types.
+    min_value: Union[:class:`int`, :class:`float`]
+        The minimum numerical value that this option can have.
+        Defaults to no minimum value.
+
+        Only applicable for ``integer`` or ``number`` types.
+    max_value: Union[:class:`int`, :class:`float`]
+        The maximum numerical value that this option can have. Must greater than or equal to ``min_value`` if it is provided.
+        Defaults to no maximum value.
+
+        Only applicable for ``integer`` or ``number`` types.
     default
         The default value passed to the attribute if the option is not passed.
         Defaults to ``None``.
@@ -471,6 +491,8 @@ def option(
         required=required,
         choices=choices,
         channel_types=channel_types and list(channel_types),
+        min_value=min_value,
+        max_value=max_value,
         default=default,
     )
 
