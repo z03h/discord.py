@@ -190,11 +190,13 @@ class Asset(AssetMixin):
 
     @classmethod
     def _from_icon(cls, state, object_id: int, icon_hash: str, path: str) -> Asset:
+        animated = icon_hash.startswith('a_')
+        format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/{path}-icons/{object_id}/{icon_hash}.png?size=1024',
+            url=f'{cls.BASE}/{path}-icons/{object_id}/{icon_hash}.{format}?size=1024',
             key=icon_hash,
-            animated=False,
+            animated=animated,
         )
 
     @classmethod
@@ -208,11 +210,13 @@ class Asset(AssetMixin):
 
     @classmethod
     def _from_guild_image(cls, state, guild_id: int, image: str, path: str) -> Asset:
+        animated = image.startswith('a_')
+        format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/{path}/{guild_id}/{image}.png?size=1024',
+            url=f'{cls.BASE}/{path}/{guild_id}/{image}.{format}?size=1024',
             key=image,
-            animated=False,
+            animated=animated,
         )
 
     @classmethod
