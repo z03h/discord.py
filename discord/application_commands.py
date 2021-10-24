@@ -627,7 +627,7 @@ def _get_application_command_options(
     if len(option_kwargs):
         for attr, annotation in annotations.items():
             if attr in result:
-                return
+                continue
 
             result[attr] = res = option(**option_kwargs)
             if res.name is MISSING:
@@ -751,7 +751,7 @@ class ApplicationCommandMeta(type):
 
         return cls
 
-    def to_option_dict(cls, *, match: bool = False) -> ApplicationCommandOptionPayload:
+    def to_option_dict(cls) -> ApplicationCommandOptionPayload:
         payload = {
             'name': cls.__application_command_name__,
             'description': cls.__application_command_description__,
