@@ -123,9 +123,10 @@ if TYPE_CHECKING:
 
     from typing_extensions import ParamSpec
 
-    from .permissions import Permissions
     from .abc import Snowflake
     from .invite import Invite
+    from .file import File
+    from .permissions import Permissions
     from .template import Template
 
     class _RequestLike(Protocol):
@@ -989,6 +990,38 @@ def resolve_annotation(
     if cache is None:
         cache = {}
     return evaluate_annotation(annotation, globalns, locals, cache)
+
+
+def resolve_multipart(payload: Dict[str, Any], files: Sequence[File]) -> List[Dict[str, Any]]:
+    form = []
+    payload['attachments'] = attachments = []
+
+    for index, file in enumerate(files):
+        form.append(
+            {
+                'name': f'files[{index}]',
+                'value': file.fp,
+                'filename': file.filename,
+                'content_type': 'application/octet-stream',
+            }
+        )
+        if description := file.description:
+            attachments.append(
+                {
+                    'id': index,
+                    'description': description,
+                    'filename': file.filename,
+                }
+            )
+
+    form.append(
+        {
+            'name': 'payload_json',
+            'value': _to_json(payload),
+            'content_type': 'application/json',
+        }
+    )
+    return form
 
 
 TimestampStyle = Literal['f', 'F', 'd', 'D', 't', 'T', 'R']

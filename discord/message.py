@@ -140,6 +140,10 @@ class Attachment(Hashable):
         The attachment's width, in pixels. Only applicable to images and videos.
     filename: :class:`str`
         The attachment's filename.
+    description: Optional[:class:`str`]
+        The description or caption displayed for this image. ``None`` if this attachment does not have one.
+
+        .. versionadded:: 2.0
     url: :class:`str`
         The attachment URL. If the message this attachment was attached
         to is deleted, then this will 404.
@@ -162,6 +166,7 @@ class Attachment(Hashable):
         'size',
         'height',
         'width',
+        'description',
         'filename',
         'url',
         'proxy_url',
@@ -175,6 +180,7 @@ class Attachment(Hashable):
         self.size: int = data['size']
         self.height: Optional[int] = data.get('height')
         self.width: Optional[int] = data.get('width')
+        self.description: Optional[str] = data.get('description')
         self.filename: str = data['filename']
         self.url: str = data.get('url')
         self.proxy_url: str = data.get('proxy_url')
@@ -277,7 +283,18 @@ class Attachment(Hashable):
         data = await self._http.get_from_cdn(url)
         return data
 
-    async def to_file(self, *, use_cached: bool = False, spoiler: bool = False) -> File:
+    @overload
+    async def to_file(
+        self,
+        *,
+        use_cached: bool = False,
+        filename: str = ...,
+        spoiler: bool = ...,
+        description: str = ...,
+    ):
+        ...
+
+    async def to_file(self, *, use_cached: bool = False, **overrides) -> File:
         """|coro|
 
         Converts the attachment into a :class:`File` suitable for sending via
@@ -296,10 +313,18 @@ class Attachment(Hashable):
             on some types of attachments.
 
             .. versionadded:: 1.4
+        filename: :class:`str`
+            The new filename for the file. Defaults to the filename of this attachment.
+
+            .. versionadded:: 2.0
         spoiler: :class:`bool`
-            Whether the file is a spoiler.
+            Whether the file is a spoiler. Defaults to whether this attachment is a spoiler.
 
             .. versionadded:: 1.4
+        description: :class:`str`
+            The description or caption of the file. Defaults to the description of this attachment.
+
+            .. versionadded:: 2.0
 
         Raises
         ------
@@ -315,15 +340,22 @@ class Attachment(Hashable):
         :class:`File`
             The attachment as a file suitable for sending.
         """
-
         data = await self.read(use_cached=use_cached)
-        return File(io.BytesIO(data), filename=self.filename, spoiler=spoiler)
+
+        kwargs = {
+            'filename': self.filename,
+            'description': self.description,
+            'spoiler': self.spoiler,
+            **overrides,
+        }
+        return File(io.BytesIO(data), **kwargs)
 
     def to_dict(self) -> AttachmentPayload:
         result: AttachmentPayload = {
             'filename': self.filename,
             'id': self.id,
             'proxy_url': self.proxy_url,
+            'description': self.description,
             'size': self.size,
             'url': self.url,
             'spoiler': self.is_spoiler(),

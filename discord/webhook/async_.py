@@ -481,34 +481,10 @@ def handle_message_parameters(
     elif previous_allowed_mentions is not None:
         payload['allowed_mentions'] = previous_allowed_mentions.to_dict()
 
-    multipart = []
     if file is not MISSING:
         files = [file]
 
-    if files:
-        multipart.append({'name': 'payload_json', 'value': utils._to_json(payload)})
-        payload = None
-        if len(files) == 1:
-            file = files[0]
-            multipart.append(
-                {
-                    'name': 'file',
-                    'value': file.fp,
-                    'filename': file.filename,
-                    'content_type': 'application/octet-stream',
-                }
-            )
-        else:
-            for index, file in enumerate(files):
-                multipart.append(
-                    {
-                        'name': f'file{index}',
-                        'value': file.fp,
-                        'filename': file.filename,
-                        'content_type': 'application/octet-stream',
-                    }
-                )
-
+    multipart = utils.resolve_multipart(payload, files)
     return ExecuteWebhookParameters(payload=payload, multipart=multipart, files=files)
 
 

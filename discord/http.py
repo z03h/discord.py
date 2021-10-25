@@ -481,8 +481,6 @@ class HTTPClient:
         stickers: Optional[List[sticker.StickerItem]] = None,
         components: Optional[List[components.Component]] = None,
     ) -> Response[message.Message]:
-        form = []
-
         payload: Dict[str, Any] = {'tts': tts}
         if content:
             payload['content'] = content
@@ -501,28 +499,7 @@ class HTTPClient:
         if stickers:
             payload['sticker_ids'] = stickers
 
-        form.append({'name': 'payload_json', 'value': utils._to_json(payload)})
-        if len(files) == 1:
-            file = files[0]
-            form.append(
-                {
-                    'name': 'file',
-                    'value': file.fp,
-                    'filename': file.filename,
-                    'content_type': 'application/octet-stream',
-                }
-            )
-        else:
-            for index, file in enumerate(files):
-                form.append(
-                    {
-                        'name': f'file{index}',
-                        'value': file.fp,
-                        'filename': file.filename,
-                        'content_type': 'application/octet-stream',
-                    }
-                )
-
+        form = utils.resolve_multipart(payload, files)
         return self.request(route, form=form, files=files)
 
     def send_files(
