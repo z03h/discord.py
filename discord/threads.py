@@ -663,6 +663,28 @@ class Thread(Messageable, Hashable):
         """
         await self._state.http.remove_user_from_thread(self.id, user.id)
 
+    async def fetch_member(self, id: int) -> ThreadMember:
+        """|coro|
+
+        Fetches a :class:`ThreadMember` in this thread by their user ID.
+
+
+        This requires :attr:`Intents.members` to get information about members
+        other than yourself.
+
+        Raises
+        -------
+        HTTPException
+            Fetching the thread member failed.
+
+        Returns
+        -------
+        :class:`ThreadMember`
+            The fetched thread member.
+        """
+        data = await self._state.http.get_thread_member(channel_id=self.id, user_id=id)
+        return ThreadMember(parent=self, data=data)
+
     async def fetch_members(self) -> List[ThreadMember]:
         """|coro|
 
