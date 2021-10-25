@@ -35,6 +35,7 @@ __all__ = (
     'Intents',
     'MemberCacheFlags',
     'ApplicationFlags',
+    'ActivityFlags',
 )
 
 FV = TypeVar('FV', bound='flag_value')
@@ -1074,3 +1075,71 @@ class ApplicationFlags(BaseFlags):
     def embedded(self):
         """:class:`bool`: Returns ``True`` if the application is embedded within the Discord client."""
         return 1 << 17
+
+
+@fill_with_flags()
+class ActivityFlags(BaseFlags):
+    """Wraps activity flags.
+
+    .. container:: operations
+
+        .. describe:: x == y
+
+            Checks if two ActivityFlags are equal.
+        .. describe:: x != y
+
+            Checks if two ActivityFlags are not equal.
+        .. describe:: hash(x)
+
+            Return the flag's hash.
+        .. describe:: iter(x)
+
+            Returns an iterator of ``(name, value)`` pairs. This allows it
+            to be, for example, constructed as a dict or a list of pairs.
+            Note that aliases are not shown.
+
+    .. versionadded:: 2.0
+
+    Attributes
+    -----------
+    value: :class:`int`
+        The raw value. You should query flags via the properties
+        rather than using this raw value.
+    """
+
+    @flag_value
+    def instance(self):
+        return 1
+
+    @flag_value
+    def join(self):
+        return 2
+
+    @flag_value
+    def spectate(self):
+        return 4
+
+    @flag_value
+    def join_request(self):
+        return 8
+
+    @flag_value
+    def sync(self):
+        return 16
+
+    @flag_value
+    def play(self):
+        return 32
+
+    @flag_value
+    def party_privacy_friends(self):
+        return 64
+
+    @flag_value
+    def party_privacy_voice_channel(self):
+        return 128
+
+    @flag_value
+    def embedded(self):
+        return 256
+

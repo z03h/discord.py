@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union, overload
 
 from .asset import Asset
 from .enums import ActivityType, try_enum
+from .flags import ActivityFlags
 from .colour import Colour
 from .partial_emoji import PartialEmoji
 from .utils import _get_as_snowflake
@@ -205,7 +206,7 @@ class Activity(BaseActivity):
         'timestamps',
         'assets',
         'party',
-        'flags',
+        '_flags',
         'sync_id',
         'session_id',
         'type',
@@ -226,10 +227,10 @@ class Activity(BaseActivity):
         self.application_id: Optional[int] = _get_as_snowflake(kwargs, 'application_id')
         self.name: Optional[str] = kwargs.pop('name', None)
         self.url: Optional[str] = kwargs.pop('url', None)
-        self.flags: int = kwargs.pop('flags', 0)
         self.sync_id: Optional[str] = kwargs.pop('sync_id', None)
         self.session_id: Optional[str] = kwargs.pop('session_id', None)
         self.buttons: List[ActivityButton] = kwargs.pop('buttons', [])
+        self._flags: int = kwargs.pop('flags', 0)
 
         activity_type = kwargs.pop('type', -1)
         self.type: ActivityType = (
@@ -323,6 +324,14 @@ class Activity(BaseActivity):
     def small_image_text(self) -> Optional[str]:
         """Optional[:class:`str`]: Returns the small image asset hover text of this activity if applicable."""
         return self.assets.get('small_text', None)
+
+    @property
+    def flags(self) -> ActivityFlags:
+        """:class:`ActivityFlags` Flags for this activity.
+
+        .. versionadded:: 2.0
+        """
+        return ActivityFlags._from_value(self._flags)
 
 
 class Game(BaseActivity):
@@ -601,6 +610,14 @@ class Spotify:
 
         There is an alias for this named :attr:`colour`"""
         return self.colour
+
+    @property
+    def flags(self) -> ActivityFlags:
+        """:class:`ActivityFlags` Flags for this activity.
+
+        .. versionadded:: 2.0
+        """
+        return ActivityFlags._from_value(48)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

@@ -288,8 +288,8 @@ class Invite(Hashable):
 
         .. versionadded:: 2.0
 
-    channel: Union[:class:`abc.GuildChannel`, :class:`Object`, :class:`PartialInviteChannel`]
-        The channel the invite is for.
+    channel: Optional[Union[:class:`abc.GuildChannel`, :class:`Object`, :class:`PartialInviteChannel`]]
+        The channel the invite is for. Or None if it is a friend invite.
     target_type: :class:`InviteTarget`
         The type of target for the voice channel invite.
 
