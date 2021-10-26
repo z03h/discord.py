@@ -253,6 +253,7 @@ class Guild(Hashable):
         'max_video_channel_users',
         'premium_tier',
         'premium_subscription_count',
+        'premium_progress_bar_enabled',
         'preferred_locale',
         'nsfw_level',
         '_members',
@@ -433,6 +434,7 @@ class Guild(Hashable):
         self.max_video_channel_users: Optional[int] = guild.get('max_video_channel_users')
         self.premium_tier: int = guild.get('premium_tier', 0)
         self.premium_subscription_count: int = guild.get('premium_subscription_count') or 0
+        self.premium_progress_bar_enabled: bool = guild.get('premium_progress_bar_enabled', False)
         self._system_channel_flags: int = guild.get('system_channel_flags', 0)
         self.preferred_locale: Optional[str] = guild.get('preferred_locale')
         self._discovery_splash: Optional[str] = guild.get('discovery_splash')
@@ -1354,6 +1356,7 @@ class Guild(Hashable):
         preferred_locale: str = MISSING,
         rules_channel: Optional[TextChannel] = MISSING,
         public_updates_channel: Optional[TextChannel] = MISSING,
+        premium_progress_bar_enabled: bool = MISSING,
     ) -> Guild:
         r"""|coro|
 
@@ -1366,7 +1369,7 @@ class Guild(Hashable):
             The `rules_channel` and `public_updates_channel` keyword-only parameters were added.
 
         .. versionchanged:: 2.0
-            The `discovery_splash` and `community` keyword-only parameters were added.
+            The `discovery_splash`, `community`, and `premium_progress_bar_enabled` keyword-only parameters were added.
 
         .. versionchanged:: 2.0
             The newly updated guild is returned.
@@ -1561,6 +1564,9 @@ class Guild(Hashable):
                     )
 
             fields['features'] = features
+
+        if premium_progress_bar_enabled is not MISSING:
+            fields['premium_progress_bar_enabled'] = premium_progress_bar_enabled
 
         data = await http.edit_guild(self.id, reason=reason, **fields)
         return Guild(data=data, state=self._state)
