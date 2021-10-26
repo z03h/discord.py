@@ -230,6 +230,10 @@ class Guild(Hashable):
         The guild's NSFW level.
 
         .. versionadded:: 2.0
+    premium_progress_bar_enabled: :class:`bool`
+        Whether or not the premium boosting progress bar is displayed.
+
+        .. versionadded:: 2.0
     """
 
     __slots__ = (
@@ -1434,6 +1438,8 @@ class Guild(Hashable):
             The new channel that is used for public updates from Discord. This is only available to
             guilds that contain ``PUBLIC`` in :attr:`Guild.features`. Could be ``None`` for no
             public updates channel.
+        premium_progress_bar_enabled: :class:`bool`
+            Whether or not the premium boosting progress bar should be displayed.
         reason: Optional[:class:`str`]
             The reason for editing this guild. Shows up on the audit log.
 
