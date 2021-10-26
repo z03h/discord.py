@@ -1195,6 +1195,8 @@ class Message(Hashable):
         content: Optional[str] = MISSING,
         embed: Optional[Embed] = MISSING,
         embeds: List[Embed] = MISSING,
+        file: File = MISSING,
+        files: List[File] = MISSING,
         attachments: List[Attachment] = MISSING,
         suppress: bool = MISSING,
         delete_after: Optional[float] = None,
@@ -1221,6 +1223,14 @@ class Message(Hashable):
         embeds: List[:class:`Embed`]
             The new embeds to replace the original with. Must be a maximum of 10.
             To remove all embeds ``[]`` should be passed.
+
+            .. versionadded:: 2.0
+        file: :class:`~discord.File`
+            The new file to add.
+
+            .. versionadded:: 2.0
+        files: List[:class:`~discord.File`]
+            The new files to add.
 
             .. versionadded:: 2.0
         attachments: List[:class:`Attachment`]
@@ -1256,10 +1266,12 @@ class Message(Hashable):
             Tried to suppress a message without permissions or
             edited a message's content or embed that isn't yours.
         ~discord.InvalidArgument
-            You specified both ``embed`` and ``embeds``
+            You specified both ``embed`` and ``embeds`` or ``file`` and ``files``.
         """
 
         payload: Dict[str, Any] = {}
+        edit_method = self._state.http.edit_message
+
         if content is not MISSING:
             if content is not None:
                 payload['content'] = str(content)
@@ -1276,6 +1288,22 @@ class Message(Hashable):
                 payload['embeds'] = [embed.to_dict()]
         elif embeds is not MISSING:
             payload['embeds'] = [e.to_dict() for e in embeds]
+
+        if file is not MISSING and files is not MISSING:
+            raise InvalidArgument('cannot pass both file and files parameter to edit()')
+
+        if files is not MISSING:
+            if len(files) > 10:
+                raise InvalidArgument('files parameter must be a list of up to 10 elements')
+            elif not all(isinstance(file, File) for file in files):
+                raise InvalidArgument('files parameter must be a list of File')
+            payload['files'] = files
+            edit_method = self._state.http.edit_files
+        elif file is not MISSING:
+            if not isinstance(file, File):
+                raise InvalidArgument('file parameter must be File')
+            payload['files'] = [file]
+            edit_method = self._state.http.edit_files
 
         if suppress is not MISSING:
             flags = MessageFlags._from_value(self.flags.value)
@@ -1302,7 +1330,7 @@ class Message(Hashable):
             else:
                 payload['components'] = []
 
-        data = await self._state.http.edit_message(self.channel.id, self.id, **payload)
+        data = await edit_method(self.channel.id, self.id, **payload)
         message = Message(state=self._state, channel=self.channel, data=data)
 
         if view and not view.is_finished():
@@ -1742,6 +1770,7 @@ class PartialMessage(Hashable):
         embed: Optional[:class:`Embed`]
             The new embed to replace the original with.
             Could be ``None`` to remove the embed.
+        embeds:
         suppress: :class:`bool`
             Whether to suppress embeds for the message. This removes
             all the embeds if set to ``True``. If set to ``False``
@@ -1758,6 +1787,21 @@ class PartialMessage(Hashable):
             to the object, otherwise it uses the attributes set in :attr:`~discord.Client.allowed_mentions`.
             If no object is passed at all then the defaults given by :attr:`~discord.Client.allowed_mentions`
             are used instead.
+        file: :class:`~discord.File`
+            New file to add to the message. Cannot be used with ``files``.
+
+            .. versionadded:: 2.0
+
+        files: List[:class:`~discord.File`]
+            List of new files to add to the message. Cannot be used with ``file``.
+
+            .. versionadded:: 2.0
+
+        attachments: List[:class:`Attachment`]
+            List of attachments to keep. Empty list removes attachments.
+
+            .. versionadded:: 2.0
+
         view: Optional[:class:`~discord.ui.View`]
             The updated view to update this message with. If ``None`` is passed then
             the view is removed.
@@ -1773,12 +1817,15 @@ class PartialMessage(Hashable):
         Forbidden
             Tried to suppress a message without permissions or
             edited a message's content or embed that isn't yours.
+        ~discord.InvalidArgument
+            You specified both ``embed`` and ``embeds`` or ``file`` and ``files``.
 
         Returns
         ---------
         Optional[:class:`Message`]
             The message that was edited.
         """
+        edit_method = self._state.http.edit_message
 
         try:
             content = fields['content']
@@ -1788,13 +1835,29 @@ class PartialMessage(Hashable):
             if content is not None:
                 fields['content'] = str(content)
 
+        if 'file' in fields and 'files' in fields:
+            raise InvalidArgument('cannot pass both file and files parameter to edit()')
+        elif 'file' in fields or 'files' in fields:
+            edit_method = self._state.http.edit_files
+
+        if 'embed' in fields and 'embeds' in fields:
+            raise InvalidArgument('cannot pass both embed and embeds parameter to edit()')
+        if 'embeds' in fields:
+            fields['embeds'] = [embed.to_dict() for embed in fields['embeds']]
+        else:
+            try:
+                embed = fields.pop('embed')
+            except KeyError:
+                pass
+            else:
+                fields['embeds'] = [embed.to_dict()] if embed is not None else []
+
         try:
-            embed = fields['embed']
+            attachments = fields.pop('attachments')
         except KeyError:
             pass
         else:
-            if embed is not None:
-                fields['embed'] = embed.to_dict()
+            fields['attachments'] = [a.to_dict() for a in attachments]
 
         try:
             suppress: bool = fields.pop('suppress')
@@ -1832,7 +1895,7 @@ class PartialMessage(Hashable):
                 fields['components'] = []
 
         if fields:
-            data = await self._state.http.edit_message(self.channel.id, self.id, **fields)
+            data = await edit_method(self.channel.id, self.id, **fields)
 
         if delete_after is not None:
             await self.delete(delay=delete_after)

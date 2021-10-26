@@ -568,6 +568,65 @@ class HTTPClient:
         r = Route('PATCH', '/channels/{channel_id}/messages/{message_id}', channel_id=channel_id, message_id=message_id)
         return self.request(r, json=fields)
 
+    def edit_files(self, channel_id: Snowflake, message_id: Snowflake, **fields:Any) -> Response[message.Message]:
+        r = Route('PATCH', '/channels/{channel_id}/messages/{message_id}', channel_id=channel_id, message_id=message_id)
+        return self.edit_multipart_helper(r, **fields)
+
+    def edit_multipart_helper(
+        self,
+        route: Route,
+        *,
+        files: Sequence[File],
+        content: Optional[str] = MISSING,
+        embeds: Optional[Iterable[Optional[embed.Embed]]] = None,
+        attachments: Optional[Iterable[message.Attachment]] = None,
+        allowed_mentions: Optional[message.AllowedMentions] = None,
+        components: Optional[List[components.Component]] = None,
+    ) -> Response[message.Message]:
+        form = []
+
+        payload: Dict[str, Any] = {}
+
+        if content is not MISSING:
+            payload['content'] = content
+
+        if embeds is not None:
+            payload['embeds'] = embeds
+
+        if allowed_mentions is not None:
+            payload['allowed_mentions'] = allowed_mentions
+
+        if attachments is not None:
+            payload['attachments'] = attachments
+
+        if components is not None:
+            payload['components'] = components
+
+        form.append({'name': 'payload_json', 'value': utils._to_json(payload)})
+
+        if len(files) == 1:
+            file = files[0]
+            form.append(
+                {
+                    'name': 'file',
+                    'value': file.fp,
+                    'filename': file.filename,
+                    'content_type': 'application/octet-stream',
+                }
+            )
+        else:
+            for index, file in enumerate(files):
+                form.append(
+                    {
+                        'name': f'file{index}',
+                        'value': file.fp,
+                        'filename': file.filename,
+                        'content_type': 'application/octet-stream',
+                    }
+                )
+
+        return self.request(route, form=form, files=files)
+
     def add_reaction(self, channel_id: Snowflake, message_id: Snowflake, emoji: str) -> Response[None]:
         r = Route(
             'PUT',
