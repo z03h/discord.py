@@ -1076,6 +1076,16 @@ class ApplicationFlags(BaseFlags):
         """:class:`bool`: Returns ``True`` if the application is embedded within the Discord client."""
         return 1 << 17
 
+    @flag_value
+    def gateway_message_content(self):
+        """:class:`bool`: Returns ``True`` if the application has access to message intent."""
+        return 1 << 18
+
+    @flag_value
+    def gateway_message_content_limited(self):
+        """:class:`bool`: Returns ``True`` if the application has enabled to message intent."""
+        return 1 << 19
+
 
 @fill_with_flags()
 class ActivityFlags(BaseFlags):
