@@ -685,6 +685,29 @@ class Thread(Messageable, Hashable):
         members = await self._state.http.get_thread_members(self.id)
         return [ThreadMember(parent=self, data=data) for data in members]
 
+    async def fetch_member(self, user_id: int, /) -> ThreadMember:
+        """|coro
+
+        Retrieves a :class:`ThreadMember` from the thread.
+
+        This requires :attr:`Intents.members` to get information about members
+        other than yourself.
+
+        Raises
+        -------
+        HTTPException
+            Retrieving the member failed.
+        NotFound
+            If the user is not a member of the thread.
+
+        Returns
+        --------
+        :class:`ThreadMember`
+            The thread member requested.
+        """
+        data = await self._state.http.get_thread_member(self.id, user_id)
+        return ThreadMember(parent=self, data=data)
+
     async def delete(self):
         """|coro|
 

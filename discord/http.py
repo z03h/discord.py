@@ -1035,6 +1035,10 @@ class HTTPClient:
         route = Route('GET', '/channels/{channel_id}/thread-members', channel_id=channel_id)
         return self.request(route)
 
+    def get_thread_member(self, channel_id: Snowflake, user_id: Snowflake) -> Response[threads.ThreadMember]:
+        route = Route('GET', '/channels/{channel_id}/thread-members/{user_id}', channel_id=channel_id, user_id=user_id)
+        return self.request(route)
+
     # Webhook management
 
     def create_webhook(

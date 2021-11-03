@@ -325,5 +325,21 @@ class Colour:
         """
         return cls(0xFEE75C)
 
+    @classmethod
+    def white(cls: Type[CT]) -> CT:
+        """A factory method that returns a :class:`Colour` with a value of ``0xFFFFFF``.
+
+        .. versionadded:: 2.0
+        """
+        return cls(0xFFFFFF)
+
+    @classmethod
+    def black(cls: Type[CT]) -> CT:
+        """A factory method that returns a :class:`Colour` with a value of ``0x000000``.
+
+        .. versionadded:: 2.0
+        """
+        return cls(0)
+
 
 Color = Colour
