@@ -75,6 +75,7 @@ __all__ = (
     'ThreadConverter',
     'GuildChannelConverter',
     'GuildStickerConverter',
+    'PartialMessageConverter',
     'clean_content',
     'Greedy',
     'run_converters',
@@ -863,6 +864,18 @@ class GuildStickerConverter(IDConverter[discord.GuildSticker]):
         return result
 
 
+class PartialMessageableConverter(IDConverter[discord.PartialMessageable]):
+    """Converts to a :class:`discord.PartialMessageable`.
+    .. versionadded:: 2.0
+    """
+
+    async def convert(self, ctx: Context, argument: str) -> discord.PartialMessageable:
+        match = self._get_id_match(argument) or re.match(r'<#([0-9]{15,20})>$', argument)
+        if not match:
+            raise ChannelNotFound
+        return ctx.bot.get_partial_messageable(int(match.group(1)))
+
+
 class clean_content(Converter[str]):
     """Converts the argument to mention scrubbed version of
     said content.
@@ -1053,6 +1066,7 @@ CONVERTER_MAPPING: Dict[Type[Any], Any] = {
     discord.Thread: ThreadConverter,
     discord.abc.GuildChannel: GuildChannelConverter,
     discord.GuildSticker: GuildStickerConverter,
+    discord.PartialMessageable: PartialMessageableConverter,
 }
 
 

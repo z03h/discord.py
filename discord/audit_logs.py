@@ -85,6 +85,7 @@ def _transform_member_id(entry: AuditLogEntry, data: Optional[Snowflake]) -> Uni
         return None
     return entry._get_member(int(data))
 
+
 def _transform_guild_id(entry: AuditLogEntry, data: Optional[Snowflake]) -> Optional[Guild]:
     if data is None:
         return None
@@ -119,7 +120,12 @@ def _transform_overwrites(
 def _transform_icon(entry: AuditLogEntry, data: Optional[str]) -> Optional[Asset]:
     if data is None:
         return None
-    return Asset._from_guild_icon(entry._state, entry.guild.id, data)
+
+    # filter for role icon vs guild icon
+    if entry.action.name.startswith('role_'):
+        return Asset._from_role_icon(entry._state, entry.target.id, data)
+    else:
+        return Asset._from_guild_icon(entry._state, entry.guild.id, data)
 
 
 def _transform_avatar(entry: AuditLogEntry, data: Optional[str]) -> Optional[Asset]:
@@ -146,11 +152,13 @@ def _enum_transformer(enum: Type[T]) -> Callable[[AuditLogEntry, int], T]:
 
     return _transform
 
+
 def _transform_type(entry: AuditLogEntry, data: Union[int]) -> Union[enums.ChannelType, enums.StickerType]:
     if entry.action.name.startswith('sticker_'):
         return enums.try_enum(enums.StickerType, data)
     else:
         return enums.try_enum(enums.ChannelType, data)
+
 
 class AuditLogDiff:
     def __len__(self) -> int:

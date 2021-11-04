@@ -1806,8 +1806,12 @@ def has_role(item: Union[int, str]) -> Callable[[T], T]:
             raise NoPrivateMessage()
 
         # ctx.guild is None doesn't narrow ctx.author to Member
+        # should catch above since there can be instances of users in guild channels
+        if not isinstance(ctx.author, discord.Member):
+            raise MissingRole(item)
+
         if isinstance(item, int):
-            role = discord.utils.get(ctx.author.roles, id=item)  # type: ignore
+            role = ctx.author.get_role(item)  # type: ignore
         else:
             role = discord.utils.get(ctx.author.roles, name=item)  # type: ignore
         if role is None:
@@ -1853,7 +1857,7 @@ def has_any_role(*items: Union[int, str]) -> Callable[[T], T]:
 
         # ctx.guild is None doesn't narrow ctx.author to Member
         getter = functools.partial(discord.utils.get, ctx.author.roles)  # type: ignore
-        if any(getter(id=item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
+        if any(ctx.author.get_role(item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
             return True
         raise MissingAnyRole(list(items))
 
@@ -1879,7 +1883,7 @@ def bot_has_role(item: int) -> Callable[[T], T]:
 
         me = ctx.me
         if isinstance(item, int):
-            role = discord.utils.get(me.roles, id=item)
+            role = me.get_role(item)
         else:
             role = discord.utils.get(me.roles, name=item)
         if role is None:
@@ -1906,7 +1910,7 @@ def bot_has_any_role(*items: int) -> Callable[[T], T]:
 
         me = ctx.me
         getter = functools.partial(discord.utils.get, me.roles)
-        if any(getter(id=item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
+        if any(me.get_role(item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
             return True
         raise BotMissingAnyRole(list(items))
     return check(predicate)
