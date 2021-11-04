@@ -2517,7 +2517,7 @@ class Guild(Hashable):
             fields['icon'] = utils._bytes_to_base64_data(icon)
 
         if unicode_emoji is not MISSING:
-            fields['unicode_emoji'] = utils._bytes_to_base64_data(str(unicode_emoji))
+            fields['unicode_emoji'] = str(unicode_emoji)
 
         data = await self._state.http.create_role(self.id, reason=reason, **fields)
         role = Role(guild=self, data=data, state=self._state)
