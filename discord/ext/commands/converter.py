@@ -872,7 +872,7 @@ class PartialMessageableConverter(IDConverter[discord.PartialMessageable]):
     async def convert(self, ctx: Context, argument: str) -> discord.PartialMessageable:
         match = self._get_id_match(argument) or re.match(r'<#([0-9]{15,20})>$', argument)
         if not match:
-            raise ChannelNotFound
+            raise ChannelNotFound(argument)
         return ctx.bot.get_partial_messageable(int(match.group(1)))
 
 
