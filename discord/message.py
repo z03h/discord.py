@@ -1203,6 +1203,7 @@ class Message(Hashable):
         attachments: List[Attachment] = ...,
         suppress: bool = ...,
         delete_after: Optional[float] = ...,
+        files: List[File] = ...,
         allowed_mentions: Optional[AllowedMentions] = ...,
         view: Optional[View] = ...,
     ) -> Message:
@@ -1217,6 +1218,7 @@ class Message(Hashable):
         attachments: List[Attachment] = ...,
         suppress: bool = ...,
         delete_after: Optional[float] = ...,
+        file: File = ...,
         allowed_mentions: Optional[AllowedMentions] = ...,
         view: Optional[View] = ...,
     ) -> Message:
