@@ -1856,6 +1856,10 @@ def has_any_role(*items: Union[int, str]) -> Callable[[T], T]:
             raise NoPrivateMessage()
 
         # ctx.guild is None doesn't narrow ctx.author to Member
+        # should catch above since there can be instances of users in guild channels
+        if not isinstance(ctx.author, discord.Member):
+            raise MissingAnyRole(items)
+
         getter = functools.partial(discord.utils.get, ctx.author.roles)  # type: ignore
         if any(ctx.author.get_role(item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
             return True
