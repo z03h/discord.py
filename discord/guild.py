@@ -45,7 +45,14 @@ from typing import (
 
 from . import abc, utils
 from .asset import Asset
-from .channel import _guild_channel_factory, _threaded_guild_channel_factory
+from .channel import (
+    _guild_channel_factory,
+    _threaded_guild_channel_factory,
+    VoiceChannel,
+    StageChannel,
+    TextChannel,
+    CategoryChannel
+)
 from .colour import Colour
 from .emoji import Emoji
 from .enums import (
@@ -92,7 +99,7 @@ if TYPE_CHECKING:
     )
     from .types.voice import GuildVoiceState
     from .permissions import Permissions
-    from .channel import VoiceChannel, StageChannel, TextChannel, CategoryChannel, StoreChannel
+    from .channel import StoreChannel
     from .template import Template
     from .webhook import Webhook
     from .state import ConnectionState
