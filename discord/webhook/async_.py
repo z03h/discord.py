@@ -483,7 +483,13 @@ def handle_message_parameters(
     if file is not MISSING:
         files = [file]
 
-    multipart = utils.resolve_multipart(payload, files)
+    if files:
+        multipart = utils.resolve_multipart(payload, files)
+        multipart.append({'name': 'payload_json', 'value': utils._to_json(payload)})
+        payload = None
+    else:
+        multipart = []
+
     return ExecuteWebhookParameters(payload=payload, multipart=multipart, files=files)
 
 

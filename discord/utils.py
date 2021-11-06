@@ -994,7 +994,7 @@ def resolve_annotation(
 
 def resolve_multipart(payload: Dict[str, Any], files: Sequence[File]) -> List[Dict[str, Any]]:
     form = []
-    attachments = payload.setdefault('attachments', [])
+    # attachments = payload.setdefault('attachments', [])
 
     for index, file in enumerate(files):
         form.append(
