@@ -552,13 +552,10 @@ class HTTPClient:
         r = Route('PATCH', '/channels/{channel_id}/messages/{message_id}', channel_id=channel_id, message_id=message_id)
         return self.request(r, json=fields)
 
-    def edit_files(self, channel_id: Snowflake, message_id: Snowflake, **fields:Any) -> Response[message.Message]:
-        r = Route('PATCH', '/channels/{channel_id}/messages/{message_id}', channel_id=channel_id, message_id=message_id)
-        return self.edit_multipart_helper(r, **fields)
-
-    def edit_multipart_helper(
+    def edit_files(
         self,
-        route: Route,
+        channel_id: Snowflake,
+        message_id: Snowflake,
         *,
         files: Sequence[File],
         content: Optional[str] = MISSING,
@@ -567,7 +564,7 @@ class HTTPClient:
         allowed_mentions: Optional[message.AllowedMentions] = None,
         components: Optional[List[components.Component]] = None,
     ) -> Response[message.Message]:
-        form = []
+        route = Route('PATCH', '/channels/{channel_id}/messages/{message_id}', channel_id=channel_id, message_id=message_id)
 
         payload: Dict[str, Any] = {}
 
