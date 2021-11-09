@@ -75,7 +75,7 @@ __all__ = (
     'ThreadConverter',
     'GuildChannelConverter',
     'GuildStickerConverter',
-    'PartialMessageConverter',
+    'PartialMessageableConverter',
     'clean_content',
     'Greedy',
     'run_converters',
@@ -834,7 +834,7 @@ class GuildStickerConverter(IDConverter[discord.GuildSticker]):
     The lookup strategy is as follows (in order):
 
     1. Lookup by ID.
-    3. Lookup by name
+    2. Lookup by name
 
     .. versionadded:: 2.0
     """
