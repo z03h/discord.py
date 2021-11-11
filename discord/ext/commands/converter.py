@@ -191,6 +191,9 @@ class MemberConverter(IDConverter[discord.Member]):
         optionally caching the result if :attr:`.MemberCacheFlags.joined` is enabled.
     """
 
+    def __init__(self, *, fetch=True):
+        self.fetch = fetch
+
     async def query_member_named(self, guild, argument):
         cache = guild._state.member_cache_flags.joined
         if len(argument) > 5 and argument[-5] == '#':
@@ -245,10 +248,11 @@ class MemberConverter(IDConverter[discord.Member]):
             if guild is None:
                 raise MemberNotFound(argument)
 
-            if user_id is not None:
-                result = await self.query_member_by_id(bot, guild, user_id)
-            else:
-                result = await self.query_member_named(guild, argument)
+            if self.fetch:
+                if user_id is not None:
+                    result = await self.query_member_by_id(bot, guild, user_id)
+                else:
+                    result = await self.query_member_named(guild, argument)
 
             if not result:
                 raise MemberNotFound(argument)
@@ -276,6 +280,9 @@ class UserConverter(IDConverter[discord.User]):
         and it's not available in cache.
     """
 
+    def __init__(self, *, fetch=True):
+        self.fetch = fetch
+
     async def convert(self, ctx: Context, argument: str) -> discord.User:
         match = self._get_id_match(argument) or re.match(r'<@!?([0-9]{15,20})>$', argument)
         result = None
@@ -285,6 +292,8 @@ class UserConverter(IDConverter[discord.User]):
             user_id = int(match.group(1))
             result = ctx.bot.get_user(user_id) or _utils_get(ctx.message.mentions, id=user_id)
             if result is None:
+                if not self.fetch:
+                    raise UserNotFound(argument)
                 try:
                     result = await ctx.bot.fetch_user(user_id)
                 except discord.HTTPException:
