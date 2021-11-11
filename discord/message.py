@@ -1901,13 +1901,29 @@ class PartialMessage(Hashable):
 
         if 'file' in fields and 'files' in fields:
             raise InvalidArgument('cannot pass both file and files parameter to edit()')
-        elif 'file' in fields or 'files' in fields:
+
+        if 'files' in fields:
+            files = fields['files']
+            if len(files) > 10:
+                raise InvalidArgument('files parameter must be a list of up to 10 elements')
+            elif not all(isinstance(file, File) for file in files):
+                raise InvalidArgument('files parameter must be a list of File')
+            fields['files'] = files
+            edit_method = self._state.http.edit_files
+        elif 'file' in fields:
+            file = fields['file']
+            if not isinstance(file, File):
+                raise InvalidArgument('file parameter must be File')
+            fields['files'] = [file]
             edit_method = self._state.http.edit_files
 
         if 'embed' in fields and 'embeds' in fields:
             raise InvalidArgument('cannot pass both embed and embeds parameter to edit()')
         if 'embeds' in fields:
+            if len(fields['embeds']) > 10:
+                raise InvalidArgument('embeds parameter must be a list of up to 10 elements')
             fields['embeds'] = [embed.to_dict() for embed in fields['embeds']]
+
         else:
             try:
                 embed = fields.pop('embed')

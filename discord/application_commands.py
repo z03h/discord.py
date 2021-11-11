@@ -913,7 +913,7 @@ class ApplicationCommandStore:
     async def _handle_error(
         self,
         command: ApplicationCommand,
-        interaction: discord.Interaction,
+        interaction: Interaction,
         error: Exception,
     ) -> None:
         try:
@@ -921,7 +921,7 @@ class ApplicationCommandStore:
         except Exception as exc:
             self.state.dispatch('application_command_error', interaction, exc)
 
-    async def invoke(self, command: ApplicationCommand, interaction: discord.Interaction) -> None:
+    async def invoke(self, command: ApplicationCommand, interaction: Interaction) -> None:
         self.state.dispatch('application_command', interaction)
 
         try:
@@ -1045,7 +1045,7 @@ class ApplicationCommandStore:
 
             elif type == 7:
                 # Prefer from cache (Data is only partial)
-                cached = self.state.get_channel(int(value))
+                cached = (guild.get_channel_or_thread if guild else self.state.get_channel)(int(value))
                 if cached is None:
                     channel_data = defaultdict(lambda: None)
                     channel_data.update(resolved['channels'][value])
@@ -1061,7 +1061,11 @@ class ApplicationCommandStore:
                 value = Role(state=self.state, data=role_data, guild=guild)
 
             elif type == 9:
-                value = Object(id=int(value))
+                try:
+                    role_data = resolved['roles'][value]
+                    value = Role(state=self.state, data=role_data, guild=guild)
+                except KeyError:
+                    value = self._resolve_user(resolved=resolved, guild=guild, user_id=value)
 
             for k, v in command.__class__.__application_command_options__.items():
                 if v.name == option['name']:
