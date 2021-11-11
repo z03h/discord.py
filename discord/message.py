@@ -1911,7 +1911,7 @@ class PartialMessage(Hashable):
             fields['files'] = files
             edit_method = self._state.http.edit_files
         elif 'file' in fields:
-            file = fields['file']
+            file = fields.pop('file')
             if not isinstance(file, File):
                 raise InvalidArgument('file parameter must be File')
             fields['files'] = [file]
