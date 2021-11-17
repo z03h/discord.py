@@ -679,6 +679,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         auto_archive_duration: ThreadArchiveDuration = MISSING,
         type: Optional[ChannelType] = None,
         invitable: bool = True,
+        slowmode_delay: int = 0,
         reason: Optional[str] = None,
     ) -> Thread:
         """|coro|
@@ -709,6 +710,9 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             Whether non-moderators can invite other non-moderators to the thread.
             Only applicable for private threads.
             .. versionadded:: 2.0
+        slowmode_delay: :class:`int`
+            Specifies the slowmode rate limit for user in this channel, in seconds.
+            A value of `0` disables slowmode. The maximum value possible is `21600`.
         reason: :class:`str`
             The reason for creating a new thread. Shows up on the audit log.
 
@@ -735,6 +739,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
                 auto_archive_duration=auto_archive_duration or self.default_auto_archive_duration,
                 type=type.value,
                 invitable=invitable,
+                slowmode_delay=slowmode_delay,
                 reason=reason,
             )
         else:
@@ -743,6 +748,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
                 message.id,
                 name=name,
                 auto_archive_duration=auto_archive_duration or self.default_auto_archive_duration,
+                slowmode_delay=slowmode_delay,
                 reason=reason,
             )
 

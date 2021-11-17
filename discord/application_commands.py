@@ -39,7 +39,7 @@ from .channel import (
     StoreChannel,
     StageChannel,
     Thread,
-    _guild_channel_factory,
+    _threaded_guild_channel_factory,
 )
 from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType
 from .errors import IncompatibleCommandSignature
@@ -1049,7 +1049,7 @@ class ApplicationCommandStore:
                 if cached is None:
                     channel_data = defaultdict(lambda: None)
                     channel_data.update(resolved['channels'][value])
-                    factory, _ = _guild_channel_factory(channel_data['type'])
+                    factory, _ = _threaded_guild_channel_factory(channel_data['type'])
                     value = factory(state=self.state, data=channel_data, guild=guild)
                 else:
                     value = cached

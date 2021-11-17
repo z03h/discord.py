@@ -34,6 +34,7 @@ from typing import Dict, TYPE_CHECKING, Union, List, Optional, Any, Callable, Tu
 from . import utils
 from .reaction import Reaction
 from .emoji import Emoji
+from .channel import PartialMessageable
 from .partial_emoji import PartialEmoji
 from .enums import MessageType, ChannelType, try_enum
 from .errors import InvalidArgument, HTTPException
@@ -70,7 +71,7 @@ if TYPE_CHECKING:
     from .abc import GuildChannel, PartialMessageableChannel, MessageableChannel
     from .components import Component
     from .state import ConnectionState
-    from .channel import TextChannel, GroupChannel, DMChannel, PartialMessageable
+    from .channel import TextChannel, GroupChannel, DMChannel
     from .mentions import AllowedMentions
     from .user import User
     from .role import Role
@@ -1598,7 +1599,13 @@ class Message(Hashable):
         """
         await self._state.http.clear_reactions(self.channel.id, self.id)
 
-    async def create_thread(self, *, name: str, auto_archive_duration: ThreadArchiveDuration = MISSING) -> Thread:
+    async def create_thread(
+        self,
+        *,
+        name: str,
+        auto_archive_duration: ThreadArchiveDuration = MISSING,
+        slowmode_delay: int = 0
+    ) -> Thread:
         """|coro|
 
         Creates a public thread from this message.
@@ -1617,6 +1624,9 @@ class Message(Hashable):
         auto_archive_duration: :class:`int`
             The duration in minutes before a thread is automatically archived for inactivity.
             If not provided, the channel's default auto archive duration is used.
+        slowmode_delay: :class:`int`
+            Specifies the slowmode rate limit for user in this channel, in seconds.
+            A value of `0` disables slowmode. The maximum value possible is `21600`.
 
         Raises
         -------
@@ -1641,6 +1651,7 @@ class Message(Hashable):
             self.id,
             name=name,
             auto_archive_duration=auto_archive_duration or default_auto_archive_duration,
+            slowmode_delay=slowmode_delay,
         )
         return Thread(guild=self.guild, state=self._state, data=data)
 
@@ -1763,8 +1774,8 @@ class PartialMessage(Hashable):
             ChannelType.news_thread,
             ChannelType.public_thread,
             ChannelType.private_thread,
-        ):
-            raise TypeError(f'Expected TextChannel, DMChannel or Thread not {type(channel)!r}')
+        ) and not isinstance(channel, PartialMessage):
+            raise TypeError(f'Expected TextChannel, DMChannel, Thread or PartialMessageable not {type(channel)!r}')
 
         self.channel: PartialMessageableChannel = channel
         self._state: ConnectionState = channel._state
