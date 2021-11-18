@@ -1291,11 +1291,11 @@ class Message(Hashable):
 
             .. versionadded:: 2.0
         file: :class:`~discord.File`
-            The new file to add.
+            The new file to add. Cannot be mixed with ``files``.
 
             .. versionadded:: 2.0
         files: List[:class:`~discord.File`]
-            The new files to add.
+            The new files to add. Cannot be mixed with ``file``.
 
             .. versionadded:: 2.0
         attachments: List[:class:`Attachment`]

@@ -36,6 +36,7 @@ from .errors import InteractionResponded, HTTPException, ClientException
 from .channel import PartialMessageable, ChannelType
 
 from .user import User
+from .file import File
 from .member import Member
 from .message import Message, Attachment
 from .object import Object
@@ -74,7 +75,6 @@ if TYPE_CHECKING:
     )
     from .guild import Guild
     from .state import ConnectionState
-    from .file import File
     from .mentions import AllowedMentions
     from .embeds import Embed
     from .ui.view import View
@@ -904,6 +904,9 @@ class InteractionResponse:
         *,
         embed: Embed = MISSING,
         embeds: List[Embed] = MISSING,
+        allowed_mentions: AllowedMentions = MISSING,
+        file: File = MISSING,
+        files: List[File] = MISSING,
         view: View = MISSING,
         tts: bool = False,
         ephemeral: bool = False,
@@ -922,6 +925,19 @@ class InteractionResponse:
         embed: :class:`Embed`
             The rich embed for the content to send. This cannot be mixed with
             ``embeds`` parameter.
+        allowed_mentions: :class:`AllowedMentions`
+            Controls the mentions being processed in this message.
+            See :meth:`.abc.Messageable.send` for more information.
+
+            .. versionadded:: 2.0
+        file: :class:`~discord.File`
+            The new file to add. Cannot be mixed with ``files``.
+
+            .. versionadded:: 2.0
+        files: List[:class:`~discord.File`]
+            The new files to add. Cannot be mixed with ``file``.
+
+            .. versionadded:: 2.0
         tts: :class:`bool`
             Indicates if the message should be sent using text-to-speech.
         view: :class:`discord.ui.View`
@@ -936,9 +952,9 @@ class InteractionResponse:
         HTTPException
             Sending the message failed.
         TypeError
-            You specified both ``embed`` and ``embeds``.
+            You specified both ``embed`` and ``embeds`` or ``file`` and ``files``.
         ValueError
-            The length of ``embeds`` was invalid.
+            The length of ``embeds`` or ``files`` was invalid.
         InteractionResponded
             This interaction has already been responded to before.
         """
@@ -963,11 +979,32 @@ class InteractionResponse:
         if content is not None:
             payload['content'] = str(content)
 
+        previous_allowed_mentions: Optional[AllowedMentions] = getattr(self._parent._state, 'allowed_mentions', None)
+        if allowed_mentions is not MISSING:
+            if previous_allowed_mentions is not None:
+                payload['allowed_mentions'] = previous_allowed_mentions.merge(allowed_mentions).to_dict()
+            else:
+                payload['allowed_mentions'] = allowed_mentions.to_dict()
+        elif previous_allowed_mentions is not None:
+            payload['allowed_mentions'] = previous_allowed_mentions.to_dict()
+
         if ephemeral:
             payload['flags'] = 64
 
         if view is not MISSING:
             payload['components'] = view.to_components()
+
+        if file is not MISSING and files is not MISSING:
+            raise TypeError('cannot mix file and files keyword arugments')
+
+        if file is not MISSING:
+            files = [file]
+
+        if files is not MISSING:
+            if len(files) > 10:
+                raise ValueError('files cannot exceed maximum of 10 elements')
+        else:
+            files = None
 
         parent = self._parent
         adapter = async_context.get()
@@ -977,6 +1014,7 @@ class InteractionResponse:
             session=parent._session,
             type=InteractionResponseType.channel_message.value,
             data=payload,
+            files=files
         )
 
         if view is not MISSING:
@@ -993,8 +1031,11 @@ class InteractionResponse:
         content: Optional[Any] = MISSING,
         embed: Optional[Embed] = MISSING,
         embeds: List[Embed] = MISSING,
+        file: File = MISSING,
+        files: List[File] = MISSING,
         attachments: List[Attachment] = MISSING,
         view: Optional[View] = MISSING,
+        allowed_mentions: AllowedMentions = MISSING,
     ) -> None:
         """|coro|
 
@@ -1010,9 +1051,22 @@ class InteractionResponse:
         embed: Optional[:class:`Embed`]
             The embed to edit the message with. ``None`` suppresses the embeds.
             This should not be mixed with the ``embeds`` parameter.
+        file: :class:`~discord.File`
+            The new file to add. Cannot be mixed with ``files``.
+
+            .. versionadded:: 2.0
+        files: List[:class:`~discord.File`]
+            The new files to add. Cannot be mixed with ``file``.
+
+            .. versionadded:: 2.0
         attachments: List[:class:`Attachment`]
             A list of attachments to keep in the message. If ``[]`` is passed
             then all attachments are removed.
+        allowed_mentions: :class:`AllowedMentions`
+            Controls the mentions being processed in this message.
+            See :meth:`.abc.Messageable.send` for more information.
+
+            .. versionadded:: 2.0
         view: Optional[:class:`~discord.ui.View`]
             The updated view to update this message with. If ``None`` is passed then
             the view is removed.
@@ -1022,7 +1076,7 @@ class InteractionResponse:
         HTTPException
             Editing the message failed.
         TypeError
-            You specified both ``embed`` and ``embeds``.
+            You specified both ``embed`` and ``embeds`` or ``file`` and ``files``.
         InteractionResponded
             This interaction has already been responded to before.
         """
@@ -1058,12 +1112,30 @@ class InteractionResponse:
         if attachments is not MISSING:
             payload['attachments'] = [a.to_dict() for a in attachments]
 
+        previous_allowed_mentions: Optional[AllowedMentions] = getattr(self._parent._state, 'allowed_mentions', None)
+        if allowed_mentions is not MISSING:
+            if previous_allowed_mentions is not None:
+                payload['allowed_mentions'] = previous_allowed_mentions.merge(allowed_mentions).to_dict()
+            else:
+                payload['allowed_mentions'] = allowed_mentions.to_dict()
+        elif previous_allowed_mentions is not None:
+            payload['allowed_mentions'] = previous_allowed_mentions.to_dict()
+
         if view is not MISSING:
             state.prevent_view_updates_for(message_id)
             if view is None:
                 payload['components'] = []
             else:
                 payload['components'] = view.to_components()
+
+        if file is not MISSING and files is not MISSING:
+            raise TypeError('cannot mix file and files keyword arugments')
+
+        if file is not MISSING:
+            files = [file]
+
+        if files is MISSING:
+            files = None
 
         adapter = async_context.get()
         await adapter.create_interaction_response(
@@ -1072,6 +1144,7 @@ class InteractionResponse:
             session=parent._session,
             type=InteractionResponseType.message_update.value,
             data=payload,
+            files=files,
         )
 
         if view and not view.is_finished():
