@@ -992,9 +992,15 @@ def resolve_annotation(
     return evaluate_annotation(annotation, globalns, locals, cache)
 
 
-def resolve_multipart(payload: Dict[str, Any], files: Sequence[File]) -> List[Dict[str, Any]]:
+def resolve_multipart(
+    payload: Dict[str, Any],
+    files: Sequence[File],
+    *,
+    msg_payload: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     form = []
-    # attachments = payload.setdefault('attachments', [])
+
+    # attachments = (payload if msg_payload is None else msg_payload).setdefault('attachments', [])
 
     for index, file in enumerate(files):
         form.append(

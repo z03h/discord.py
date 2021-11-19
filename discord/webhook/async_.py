@@ -359,33 +359,7 @@ class AsyncWebhookAdapter:
 
         form = None
         if files is not None:
-            form = []
-            # attachments = payload.setdefault('attachments', [])
-
-            for index, file in enumerate(files):
-                form.append(
-                    {
-                        'name': f'files[{index}]',
-                        'value': file.fp,
-                        'filename': file.filename,
-                        'content_type': 'application/octet-stream',
-                    }
-                )
-                # attachments.append(
-                #     {
-                #         'id': index,
-                #         'description': file.description,
-                #         'filename': file.filename,
-                #     }
-                # )
-
-            form.append(
-                {
-                    'name': 'payload_json',
-                    'value': utils._to_json(payload),
-                    'content_type': 'application/json',
-                }
-            )
+            form = utils.resolve_multipart(payload, files, payload['data'])
             payload = None
 
         route = Route(
