@@ -97,15 +97,23 @@ class ApplicationCommandOptionChoice(NamedTuple):
 
     .. versionadded:: 2.0
 
+    .. note::
+        The type annotation and purpose of the ``name_localizations`` attribute is inferred and is
+        only present in order to patch a bug - the actual feature is currently undocumented.
+        It is recommended to not utilize this attribute as it may change in the future.
+
     Attributes
     ----------
     name: str
         The name of this option choice.
+    name_localizations: Optional[Dict[str, str]]
+        A mapping of localization language codes to their localized names.
     value: Union[str, int, float]
         The value that will be returned when this choice is chosen.
     """
     name: str
     value: Union[str, float]
+    name_localizations: Optional[Dict[str, str]]
 
 
 class ApplicationCommandOption(NamedTuple):
