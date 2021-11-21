@@ -113,7 +113,7 @@ class ApplicationCommandOptionChoice(NamedTuple):
     """
     name: str
     value: Union[str, float]
-    name_localizations: Optional[Dict[str, str]]
+    name_localizations: Optional[Dict[str, str]] = None
 
 
 class ApplicationCommandOption(NamedTuple):
