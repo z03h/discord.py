@@ -1000,7 +1000,7 @@ def resolve_multipart(
 ) -> List[Dict[str, Any]]:
     form = []
 
-    # attachments = (payload if msg_payload is None else msg_payload).setdefault('attachments', [])
+    attachments = (payload if msg_payload is None else msg_payload).setdefault('attachments', [])
 
     for index, file in enumerate(files):
         form.append(
@@ -1011,13 +1011,13 @@ def resolve_multipart(
                 'content_type': 'application/octet-stream',
             }
         )
-        # attachments.append(
-        #     {
-        #         'id': index,
-        #         'description': file.description,
-        #         'filename': file.filename,
-        #     }
-        # )
+        attachments.append(
+            {
+                'id': index,
+                'description': file.description,
+                'filename': file.filename,
+            }
+        )
 
     form.append(
         {
