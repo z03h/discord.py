@@ -1011,13 +1011,14 @@ def resolve_multipart(
                 'content_type': 'application/octet-stream',
             }
         )
-        attachments.append(
-            {
-                'id': index,
-                'description': file.description,
-                'filename': file.filename,
-            }
-        )
+        if file.description:
+            attachments.append(
+                {
+                    'id': index,
+                    'description': file.description,
+                    'filename': file.filename,
+                }
+            )
 
     form.append(
         {
