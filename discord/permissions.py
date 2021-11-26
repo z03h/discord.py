@@ -32,6 +32,7 @@ __all__ = (
     'PermissionOverwrite',
 )
 
+
 # A permission alias works like a regular flag but is marked
 # So the PermissionOverwrite knows to work with it
 class permission_alias(alias_flag_value):
@@ -46,7 +47,9 @@ def make_permission_alias(alias: str) -> Callable[[Callable[[Any], int]], permis
 
     return decorator
 
+
 P = TypeVar('P', bound='Permissions')
+
 
 @fill_with_flags()
 class Permissions(BaseFlags):
@@ -147,7 +150,7 @@ class Permissions(BaseFlags):
         """A factory method that creates a :class:`Permissions` with all
         permissions set to ``True``.
         """
-        return cls(0b111111111111111111111111111111111111111)
+        return cls(0b1111111111111111111111111111111111111111)
 
     @classmethod
     def all_channel(cls: Type[P]) -> P:
@@ -216,7 +219,7 @@ class Permissions(BaseFlags):
     def voice(cls: Type[P]) -> P:
         """A factory method that creates a :class:`Permissions` with all
         "Voice" permissions from the official Discord UI set to ``True``."""
-        return cls(0b00000011111100000000001100000000)
+        return cls(0b1000000000000011111100000000001100000000)
 
     @classmethod
     def stage(cls: Type[P]) -> P:
@@ -558,7 +561,17 @@ class Permissions(BaseFlags):
         """
         return 1 << 38
 
+    @flag_value
+    def start_embedded_activities(self) -> int:
+        """:class:`bool`: Returns ``True`` if a user can start embedded activities.
+
+        .. versionadded:: 2.0
+        """
+        return 1 << 39
+
+
 PO = TypeVar('PO', bound='PermissionOverwrite')
+
 
 def _augment_from_permissions(cls):
     cls.VALID_NAMES = set(Permissions.VALID_FLAGS)
@@ -671,6 +684,7 @@ class PermissionOverwrite:
         send_messages_in_threads: Optional[bool]
         external_stickers: Optional[bool]
         use_external_stickers: Optional[bool]
+        start_embedded_activities: Optional[bool]
 
     def __init__(self, **kwargs: Optional[bool]):
         self._values: Dict[str, Optional[bool]] = {}
