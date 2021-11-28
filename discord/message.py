@@ -346,7 +346,7 @@ class Attachment(Hashable):
         kwargs = {
             'filename': self.filename,
             'description': self.description,
-            'spoiler': self.spoiler,
+            'spoiler': self.is_spoiler(),
             **overrides,
         }
         return File(io.BytesIO(data), **kwargs)
