@@ -333,7 +333,7 @@ class ApplicationCommand(Hashable):
     def _from_data(self, data: ApplicationCommandPayload) -> None:
         self.type = try_enum(ApplicationCommandType, data.get('type', 1))
         self.name = data['name']
-        self.description = data['description']
+        self.description = data.get('description')
         self.id = utils._get_as_snowflake(data, 'id')
         self.guild_id = utils._get_as_snowflake(data, 'guild_id')
         self.application_id = utils._get_as_snowflake(data, 'application_id')
