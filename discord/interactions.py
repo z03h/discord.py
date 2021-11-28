@@ -67,11 +67,13 @@ if TYPE_CHECKING:
     from .application_commands import (
         ApplicationCommandOption as NativeCommandOption,
         ApplicationCommandOptionChoice as NativeCommandChoice,
+        ApplicationCommandMeta as NativeApplicationCommand,
     )
     from .client import Client
     from .enums import (
         ApplicationCommandType,
-        ApplicationCommandOptionType
+        ApplicationCommandOptionType,
+        try_enum
     )
     from .guild import Guild
     from .state import ConnectionState
@@ -329,14 +331,14 @@ class ApplicationCommand(Hashable):
         return f'<ApplicationCommand id={self.id}{guild_id} name={self.name!r} type={self.type.name!r}>'
 
     def _from_data(self, data: ApplicationCommandPayload) -> None:
-        self.type = ApplicationCommandType(data.get('type', 1))
+        self.type = try_enum(ApplicationCommandType, data.get('type', 1))
         self.name = data['name']
         self.description = data['description']
         self.id = utils._get_as_snowflake(data, 'id')
         self.guild_id = utils._get_as_snowflake(data, 'guild_id')
         self.application_id = utils._get_as_snowflake(data, 'application_id')
         self.default_permission = data.get('default_permission', True)
-        self.version = int(data['version'])
+        self.version = int(data.get('version', 0))
 
         if 'options' in data:
             self.options = [
@@ -473,6 +475,21 @@ class ApplicationCommand(Hashable):
             self.default_permission,
             frozenset(option._match_key() for option in self.options) if self.options else None,
         )
+
+    @classmethod
+    def from_native(
+        cls,
+        native_command: NativeApplicationCommand,
+        *,
+        id: int,
+        guild_id: int = MISSING,
+        state: ConnectionState
+    ):
+        data = native_command.to_dict()
+        data['id'] = id
+        if guild_id is not MISSING:
+            data['guild_id'] = guild_id
+        return cls(data=data, state=state)
 
 
 class Interaction:

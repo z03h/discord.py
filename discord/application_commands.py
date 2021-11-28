@@ -41,7 +41,7 @@ from .channel import (
     Thread,
     _threaded_guild_channel_factory,
 )
-from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType
+from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType, try_enum
 from .errors import IncompatibleCommandSignature
 from .member import Member
 from .message import Message
@@ -701,6 +701,8 @@ class ApplicationCommandMeta(type):
 
             if isinstance(base, mcs):
                 type = base.__application_command_type__
+                if not isinstance(type, ApplicationCommandType):
+                    type = try_enum(ApplicationCommandType, type)
             else:
                 type = ApplicationCommandType.chat_input
 
@@ -974,7 +976,6 @@ class ApplicationCommandStore:
                     result = result[0].get('options', [])
 
                 break
-
         return command(), result
 
     def _resolve_user(

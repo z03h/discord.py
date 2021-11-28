@@ -44,7 +44,7 @@ from .channel import _threaded_channel_factory, PartialMessageable
 from .enums import ChannelType
 from .mentions import AllowedMentions
 from .errors import *
-from .enums import Status, VoiceRegion
+from .enums import Status, VoiceRegion, try_enum, ApplicationCommandType
 from .flags import ApplicationFlags, Intents
 from .gateway import *
 from .activity import ActivityTypes, BaseActivity, create_activity
@@ -54,7 +54,7 @@ from .state import ConnectionState
 from .utils import MISSING
 from .object import Object
 from .backoff import ExponentialBackoff
-from .interactions import Interaction
+from .interactions import Interaction, ApplicationCommand
 from .webhook import Webhook
 from .iterators import GuildIterator
 from .appinfo import AppInfo
@@ -67,7 +67,6 @@ if TYPE_CHECKING:
     from .application_commands import ApplicationCommandMeta as NativeApplicationCommand, ApplicationCommandTree
     from .abc import SnowflakeTime, PrivateChannel, GuildChannel, Snowflake
     from .channel import DMChannel
-    from .interactions import ApplicationCommand
     from .message import Message
     from .member import Member
     from .voice_client import VoiceProtocol
@@ -802,7 +801,7 @@ class Client:
 
         This is useful if you have a channel_id but don't want to do an API call
         to send messages to it.
-        
+
         .. versionadded:: 2.0
 
         Parameters
@@ -1637,7 +1636,7 @@ class Client:
 
     def _store_commands(self, commands: List[NativeApplicationCommand], guild_id: int = None) -> None:
         for command in commands:
-            key = command.__application_command_name__, guild_id
+            key = command.__application_command_name__, command.__application_command_type__, guild_id
             try:
                 id = self._connection.cached_application_commands_by_name[key].id
             except KeyError:
@@ -1660,14 +1659,15 @@ class Client:
             The ID of the guild that this command should be added to.
             Defaults to the guild ID of set in the command class declaration.
         """
+        key = command.__application_command_name__, command.__application_command_type__
         if guild_id is MISSING:
             guild_id = command.__application_command_guild_id__
 
         if not guild_id:
-            self._connection._queued_global_application_commands[command.__application_command_name__] = command
+            self._connection._queued_global_application_commands[key] = command
             return
 
-        self._connection._queued_guild_application_commands[guild_id][command.__application_command_name__] = command
+        self._connection._queued_guild_application_commands[guild_id][key] = command
         self._store_commands([command], guild_id or None)
 
     def add_application_commands(self, *commands: NativeApplicationCommand, guild_id: int = MISSING) -> None:
@@ -1695,13 +1695,19 @@ class Client:
             The command tree to add.
         """
         self._connection._queued_global_application_commands.update(
-            {command.__application_command_name__: command for command in tree._global_commands}
+            {
+                (command.__application_command_name__, command.__application_command_type__): command
+                for command in tree._global_commands
+            }
         )
         self._store_commands(tree._global_commands)
 
         for guild_id, commands in tree._guild_commands.items():
             self._connection._queued_guild_application_commands[guild_id].update(
-                {command.__application_command_name__: command for command in commands}
+                {
+                    (command.__application_command_name__, command.__application_command_type__): command
+                    for command in commands
+                }
             )
             self._store_commands(commands, guild_id)
 
@@ -1735,20 +1741,126 @@ class Client:
             for command in await coro
         ]
 
-    async def update_application_commands(self) -> None:
+    async def update_application_commands(self, *, guild_id: int = MISSING) -> None:
         """|coro|
 
         Bulk-upserts and registers all queued application commands.
         To queue commands, see :meth:`.Client.add_application_command`.
+
+        Parameters
+        ------------
+        guild_id: Optional[:class:`int`]
+            The guild id to update commands for or pass ``None`` to only update
+            global commands. Returns a list of the updated commands.
+            Leave blank to update global and all guilds application commands, will
+            return a mapping of guild id  to list of :class:`ApplicationCommand`s.
+
+        Returns
+        -------
+        Union[List[:class:`ApplicationCommand`], Dict[Optional[int], List[:class:`ApplicationCommand`]]]
         """
-        await self._connection.update_application_commands()
+
+        if guild_id:
+            update_coro = self._connection.update_guild_application_commands(guild_id)
+        elif guild_id is None:
+            update_coro = self._connection.update_global_application_commands()
+        elif guild_id is MISSING:
+            update_coro = self._connection.update_application_commands()
+        else:
+            raise TypeError('guild_id must be an int or None')
+        return await update_coro
+
+    def store_application_command(
+        self,
+        id: int,
+        native_command: NativeApplicationCommand,
+        *,
+        guild_id: int = MISSING
+    ) -> ApplicationCommand:
+        """Inserts an :class:`.application_commands.ApplicationCommand` into the cache. Useful for
+        caching commands without fetching from the API.
+
+        Parameters
+        ------------
+        id: :class:`int`
+            The id of the command being cached.
+        commands: Type[:class:`.application_commands.ApplicationCommand`]
+            The command to be cached.
+        guild_id: Optional[:class:`int`]
+            The guild id the command belongs to.
+
+        Returns
+        --------
+        :class:`ApplicationCommand`
+        """
+        if guild_id is MISSING:
+            guild_id = native_command.__application_command_guild_id__
+        command = ApplicationCommand.from_native(native_command, id=id, state=self._connection, guild_id=guild_id)
+        state = self._connection
+        state.cached_application_commands[id] = command
+        state.cached_application_commands_by_name[command.name, command.type, guild_id] = command
+        self._store_commands([native_command], guild_id or None)
+        return command
+
+    def get_application_command(self, id: int, /) -> Optional[ApplicationCommand]:
+        """Gets an :class:`ApplicationCommand` from the internal cache.
+        Returns ``None`` if no command is found.
+
+        Parameters
+        -----------
+        id: :class:`int`
+            The id of the command to get.
+
+        Returns
+        --------
+        Optional[:class:`ApplicationCommand`]
+
+        """
+        return self._connection.cached_application_commands.get(id)
+
+    def get_application_command_named(
+        self,
+        name: str,
+        /,
+        type: ApplicationCommandType = None,
+        guild_id: int = None
+    ) -> Optional[ApplicationCommand]:
+        """Gets an :class:`ApplicationCommand` from the internal cache by
+        ``name``, ``type``, and ``guild_id``.
+        If ``type`` is not passed, will return the first command found of any type.
+        Returns ``None`` if no command is found.
+
+        Parameters
+        -----------
+        name: :class:`str:
+            The name of the command to get.
+        type: Optional[:class:`ApplicationCommandType`]
+            The type of the command to get.
+        guild_id: Optional[:class:`int`]
+            The guild id the command belongs to. ``None`` for global commands.
+
+        Returns
+        --------
+        Optional[:class:`ApplicationCommand`]
+        """
+        if type is not None:
+            if not isinstance(type, ApplicationCommandType):
+                type = try_enum(ApplicationCommandType, type)
+            return self._connection.cached_application_commands_by_name.get((name, type, guild_id))
+
+        for type in ApplicationCommandType:
+            command = self._connection.cached_application_commands_by_name.get((name, type, guild_id))
+            if command is not None:
+                return command
+
+        return None
 
     def add_view(self, view: View, *, message_id: Optional[int] = None) -> None:
         """Registers a :class:`~discord.ui.View` for persistent listening.
 
         This method should be used for when a view is comprised of components
         that last longer than the lifecycle of the program.
-        
+
         .. versionadded:: 2.0
 
         Parameters
@@ -1780,7 +1892,7 @@ class Client:
     @property
     def persistent_views(self) -> Sequence[View]:
         """Sequence[:class:`.View`]: A sequence of persistent views added to the client.
-        
+
         .. versionadded:: 2.0
         """
         return self._connection.persistent_views
