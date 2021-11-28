@@ -701,10 +701,11 @@ class ApplicationCommandMeta(type):
 
             if isinstance(base, mcs):
                 type = base.__application_command_type__
-                if not isinstance(type, ApplicationCommandType):
-                    type = try_enum(ApplicationCommandType, type)
             else:
                 type = ApplicationCommandType.chat_input
+
+        if not isinstance(type, ApplicationCommandType):
+            type = try_enum(ApplicationCommandType, type)
 
         if not isinstance(type, ApplicationCommandType):
             raise TypeError('application command types must be an ApplicationCommandType.')
