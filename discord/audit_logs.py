@@ -160,6 +160,10 @@ def _transform_type(entry: AuditLogEntry, data: Union[int]) -> Union[enums.Chann
         return enums.try_enum(enums.ChannelType, data)
 
 
+def _transform_timestamp(entry: AuditLogEntry, data: str) -> Optional[datetime.datetime]:
+    return utils.parse_time(data)
+
+
 class AuditLogDiff:
     def __len__(self) -> int:
         return len(self.__dict__)
@@ -217,6 +221,7 @@ class AuditLogChanges:
         'privacy_level':                 (None, _enum_transformer(enums.StagePrivacyLevel)),
         'format_type':                   (None, _enum_transformer(enums.StickerFormatType)),
         'type':                          (None, _transform_type),
+        'communication_disabled_until':  ('timeout', _transform_timestamp),
     }
     # fmt: on
 
