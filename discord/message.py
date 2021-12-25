@@ -1604,7 +1604,8 @@ class Message(Hashable):
         *,
         name: str,
         auto_archive_duration: ThreadArchiveDuration = MISSING,
-        slowmode_delay: int = 0
+        slowmode_delay: int = 0,
+        reason: Optional[str] = None
     ) -> Thread:
         """|coro|
 
@@ -1627,6 +1628,9 @@ class Message(Hashable):
         slowmode_delay: :class:`int`
             Specifies the slowmode rate limit for user in this channel, in seconds.
             A value of `0` disables slowmode. The maximum value possible is `21600`.
+        reason: Optional[:class:`str`]
+            The reason for creating this thread.
+            Shows up on the audit log.
 
         Raises
         -------
@@ -1652,6 +1656,7 @@ class Message(Hashable):
             name=name,
             auto_archive_duration=auto_archive_duration or default_auto_archive_duration,
             slowmode_delay=slowmode_delay,
+            reason=reason
         )
         return Thread(guild=self.guild, state=self._state, data=data)
 

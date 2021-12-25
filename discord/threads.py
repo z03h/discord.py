@@ -529,6 +529,7 @@ class Thread(Messageable, Hashable):
         invitable: bool = MISSING,
         slowmode_delay: int = MISSING,
         auto_archive_duration: ThreadArchiveDuration = MISSING,
+        reason: Optional[str] = None,
     ) -> Thread:
         """|coro|
 
@@ -558,6 +559,9 @@ class Thread(Messageable, Hashable):
         slowmode_delay: :class:`int`
             Specifies the slowmode rate limit for user in this thread, in seconds.
             A value of ``0`` disables slowmode. The maximum value possible is ``21600``.
+        reason: Optional[:class:`str`]
+            The reason for editing this thread.
+            Shows up on the audit log.
 
         Raises
         -------
@@ -584,6 +588,8 @@ class Thread(Messageable, Hashable):
             payload['invitable'] = invitable
         if slowmode_delay is not MISSING:
             payload['rate_limit_per_user'] = slowmode_delay
+
+        payload['reason'] = reason
 
         data = await self._state.http.edit_channel(self.id, **payload)
         # The data payload will always be a Thread payload
@@ -707,12 +713,18 @@ class Thread(Messageable, Hashable):
         members = await self._state.http.get_thread_members(self.id)
         return [ThreadMember(parent=self, data=data) for data in members]
 
-    async def delete(self):
+    async def delete(self, *, reason: Optional[str] = None):
         """|coro|
 
         Deletes this thread.
 
         You must have :attr:`~Permissions.manage_threads` to delete threads.
+
+        Parameters
+        -----------
+        reason: Optional[:class:`str`]
+            The reason for deleting this thread.
+            Shows up on the audit log.
 
         Raises
         -------
@@ -721,7 +733,7 @@ class Thread(Messageable, Hashable):
         HTTPException
             Deleting the thread failed.
         """
-        await self._state.http.delete_channel(self.id)
+        await self._state.http.delete_channel(self.id, reason=reason)
 
     def get_partial_message(self, message_id: int, /) -> PartialMessage:
         """Creates a :class:`PartialMessage` from the message ID.
