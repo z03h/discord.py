@@ -35,7 +35,7 @@ import discord.abc
 
 from . import utils
 from .asset import Asset
-from .utils import MISSING
+from .utils import MISSING, utcnow
 from .user import BaseUser, User, _UserTag
 from .activity import create_activity, ActivityTypes
 from .permissions import Permissions
@@ -261,7 +261,7 @@ class Member(discord.abc.Messageable, _UserTag):
         'guild',
         'pending',
         'nick',
-        'timeout',
+        '_timeout',
         '_client_status',
         '_user',
         '_state',
@@ -297,7 +297,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self.nick: Optional[str] = data.get('nick', None)
         self.pending: bool = data.get('pending', False)
         self._avatar: Optional[str] = data.get('avatar')
-        self.timeout = utils.parse_time(data.get('communication_disabled_until'))
+        self._timeout = utils.parse_time(data.get('communication_disabled_until'))
 
     def __str__(self) -> str:
         return str(self._user)
@@ -355,7 +355,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self.activities = member.activities
         self._state = member._state
         self._avatar = member._avatar
-        self.timeout = member.timeout
+        self._timeout = member._timeout
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below
@@ -551,6 +551,15 @@ class Member(discord.abc.Messageable, _UserTag):
             return self.activities[0]
 
     @property
+    def timeout(self) -> Optional[datetime.datetime]:
+        """Optional[:class:`datetime.timedelta`]: When the user is in timeout until.
+        Can be ``None`` if user is not timed out.
+        """
+        if self._timeout is None or self._timeout < utcnow():
+            return None
+        return self._timeout
+
+    @property
     def timeout_duration(self) -> Optional[datetime.timedelta]:
         """Optional[:class:`datetime.timedelta`]: How long the user is in timedout.
         Could be ``None`` if they are not currently in timeout.
@@ -727,6 +736,7 @@ class Member(discord.abc.Messageable, _UserTag):
             Pass ``None`` to kick them from voice.
         timeout: Optional[:class:`datetime.datetime`]
             When the user should be in timeout until.
+            Passing ``None`` or time in the past will remove any timeout.
 
             .. versionadded:: 2.0
         reason: Optional[:class:`str`]
@@ -786,7 +796,7 @@ class Member(discord.abc.Messageable, _UserTag):
             payload['roles'] = tuple(r.id for r in roles)
 
         if timeout is not MISSING:
-            if timeout is None:
+            if timeout is None or timeout < utcnow():
                 payload['communication_disabled_until'] = None
             else:
                 if timeout.tzinfo is None:
