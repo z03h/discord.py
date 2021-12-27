@@ -379,7 +379,7 @@ class Member(discord.abc.Messageable, _UserTag):
         except KeyError:
             pass
         try:
-            self.timeout = utils.parse_time(data['communication_disabled_until'])
+            self._timeout = utils.parse_time(data['communication_disabled_until'])
         except KeyError:
             pass
         self.premium_since = utils.parse_time(data.get('premium_since'))
