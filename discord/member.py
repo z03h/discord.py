@@ -796,12 +796,12 @@ class Member(discord.abc.Messageable, _UserTag):
             payload['roles'] = tuple(r.id for r in roles)
 
         if timeout is not MISSING:
-            if timeout is None or timeout < utcnow():
+            if timeout is None:
                 payload['communication_disabled_until'] = None
             else:
                 if timeout.tzinfo is None:
                     timeout = timeout.astimezone()
-                payload['communication_disabled_until'] = timeout.isoformat()
+                payload['communication_disabled_until'] = timeout.isoformat() if timeout < utcnow() else None
 
         if payload:
             data = await http.edit_member(guild_id, self.id, reason=reason, **payload)
