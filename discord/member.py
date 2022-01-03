@@ -555,8 +555,12 @@ class Member(discord.abc.Messageable, _UserTag):
         """Optional[:class:`datetime.timedelta`]: When the user is in timeout until.
         Can be ``None`` if user is not timed out.
         """
-        if self._timeout is None or self._timeout < utcnow():
+        if self._timeout is None:
             return None
+
+        if self._timeout < utcnow():
+            self._timeout = None
+
         return self._timeout
 
     @property
