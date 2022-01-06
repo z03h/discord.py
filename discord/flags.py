@@ -874,6 +874,26 @@ class Intents(BaseFlags):
         """
         return 1 << 14
 
+    @flag_value
+    def guild_events(self):
+        """:class:`bool`: Whether guild event events are enabled.
+
+        This corresponds to the following events:
+
+        - :func:`on_guild_event_create`
+        - :func:`on_guild_event_update`
+        - :func:`on_guild_event_delete`
+        - :func:`on_raw_guild_event_user_add`
+        - :func:`on_raw_guild_event_user_remove`
+        - :func:`on_guild_event_user_add`
+        - :func:`on_guild_event_user_remove`
+
+        This also corresponds to the following:
+        - :attr:`Guild.events`
+        - :meth:`Guild.get_event`
+        """
+        return 1 << 16
+
 
 @fill_with_flags()
 class MemberCacheFlags(BaseFlags):

@@ -64,6 +64,8 @@ from .enums import (
     VerificationLevel,
     VideoQualityMode,
     VoiceRegion,
+    GuildEventPrivacyLevel,
+    GuildEventLocationType,
     try_enum
 )
 from .errors import ClientException, InvalidArgument, InvalidData
@@ -82,6 +84,7 @@ from .threads import Thread, ThreadMember
 from .user import User
 from .welcome_screen import WelcomeScreen
 from .widget import Widget
+from .guild_events import GuildEvent
 
 __all__ = (
     'Guild',
@@ -284,6 +287,7 @@ class Guild(Hashable):
         '_public_updates_channel_id',
         '_stage_instances',
         '_threads',
+        '_events',
     )
 
     _PREMIUM_GUILD_LIMITS: ClassVar[Dict[Optional[int], _GuildLimit]] = {
@@ -299,6 +303,7 @@ class Guild(Hashable):
         self._members: Dict[int, Member] = {}
         self._voice_states: Dict[int, VoiceState] = {}
         self._threads: Dict[int, Thread] = {}
+        self._events: Dict[int, GuildEvent] = {}
         self._state: ConnectionState = state
         self._from_data(data)
 
@@ -341,6 +346,12 @@ class Guild(Hashable):
         for k in to_remove:
             del self._threads[k]
         return to_remove
+
+    def _add_event(self, event: GuildEvent, /):
+        self._events[event.id] = event
+
+    def _remove_event(self, event: Snowflake, /):
+        self._events.pop(event.id, None)
 
     def __str__(self) -> str:
         return self.name or ''
@@ -500,6 +511,11 @@ class Guild(Hashable):
             for thread in threads:
                 self._add_thread(Thread(guild=self, state=self._state, data=thread))
 
+        if 'guild_scheduled_events' in data:
+            events = data['guild_scheduled_events']
+            for event in events:
+                self._add_event(GuildEvent(guild=self, state=self._state, data=event))
+
     @property
     def channels(self) -> List[GuildChannel]:
         """List[:class:`abc.GuildChannel`]: A list of channels that belongs to this guild."""
@@ -512,6 +528,14 @@ class Guild(Hashable):
         .. versionadded:: 2.0
         """
         return list(self._threads.values())
+
+    @property
+    def events(self) -> List[GuildEvent]:
+        """List[:class:`GuildEvent`]: A list of events the guild has.
+
+        .. versionadded:: 2.0
+        """
+        return list(self._events.values())
 
     @property
     def large(self) -> bool:
@@ -676,6 +700,23 @@ class Guild(Hashable):
             The returned thread or ``None`` if not found.
         """
         return self._threads.get(thread_id)
+
+    def get_event(self, event_id: int, /) -> Optional[GuildEvent]:
+        """Returns an event with the given ID.
+
+        .. versionadded:: 2.0
+
+        Parameters
+        -----------
+        event_id: :class:`int`
+            The ID to search for.
+
+        Returns
+        --------
+        Optional[:class:`GuildEvent`]
+            The returned event or ``None`` if not found.
+        """
+        return self._events.get(event_id)
 
     @property
     def system_channel(self) -> Optional[TextChannel]:
@@ -3004,3 +3045,90 @@ class Guild(Hashable):
         ws = self._state._get_websocket(self.id)
         channel_id = channel.id if channel else None
         await ws.voice_state(self.id, channel_id, self_mute, self_deaf)
+
+    async def fetch_guild_events(self, with_user_count=False) -> List[GuildEvent]:
+        events = await self._state.http.get_guild_events(self.id, with_user_count=with_user_count)
+        return [GuildEvent(data=data, guild=self, state=self._state) for data in events]
+
+    async def fetch_guild_event(self, id: int, /, with_user_count=False) -> GuildEvent:
+        data = await self._state.http.get_guild_event(self.id, id, with_user_count=with_user_count)
+        return GuildEvent(data=data, guild=self, state=self._state)
+
+    async def create_event(
+        self,
+        *,
+        name: str,
+        description: str = MISSING,
+        start_time: datetime,
+        end_time: datetime = MISSING,
+        location: Union[str, VoiceChannel, StageChannel],
+        privacy_level: GuildEventPrivacyLevel = GuildEventPrivacyLevel.guild_only,
+        reason: Optional[str] = None
+    ) -> GuildEvent:
+        """|coro|
+        Creates a :class:`GuildEvent`.
+
+        .. versionadded:: 2.0
+
+        Parameters
+        -----------
+        name: :class:`str`
+            The name of the event.
+        description: Optional[:class:`str`]
+            The description of the event.
+        start_time: :class:`datetime.datetime`
+            A datetime object of when the event is supposed to start.
+        end_time: Optional[:class:`datetime.datetime`]
+            A datetime object of when the event is supposed to end.
+        location: Union[str, VoiceChannel, StageChannel]
+            The location for this event.
+        privacy_level: :class:`GuildEventPrivacyLevel`
+            The privacy level of the event.
+        reason: Optional[:class:`str`]
+            The reason to show in the audit log.
+        Raises
+        -------
+        Forbidden
+            You do not have the Manage Events permission.
+        HTTPException
+            The operation failed.
+        TypeError
+            An invalid location was given.
+
+        Returns
+        --------
+        :class:`ScheduledEvent`
+            The created scheduled event.
+        """
+
+        payload: Dict[str, Any] = {
+            'name': name,
+            'scheduled_start_time': start_time.isoformat(),
+            'privacy_level': int(privacy_level)
+        }
+
+        if isinstance(location, str):
+            payload['entity_metadata'] = {'location': location}
+            payload['entity_type'] = int(GuildEventLocationType.external)
+        else:
+            try:
+                payload['channel_id'] = location.id
+            except AttributeError:
+                raise TypeError('location must be a VoiceChannel, StageChannel, or str.')
+
+            if isinstance(location, VoiceChannel):
+                payload['entity_type'] = int(GuildEventLocationType.voice)
+            elif isinstance(location, StageChannel):
+                payload['entity_type'] = int(GuildEventLocationType.stage)
+            else:
+                raise TypeError('location must be a VoiceChannel, StageChannel, or str.')
+
+        if description is not MISSING:
+            payload["description"] = description
+
+        if end_time is not MISSING:
+            payload["scheduled_end_time"] = end_time.isoformat()
+
+        data = await self._state.http.create_scheduled_event(guild_id=self.id, reason=reason, **payload)
+        event = GuildEvent(state=self._state, guild=self, data=data)
+        return event

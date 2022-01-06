@@ -91,6 +91,7 @@ if TYPE_CHECKING:
         welcome_screen,
         threads,
         sticker,
+        guild_events
     )
     from .types.snowflake import Snowflake, SnowflakeList
 
@@ -1416,12 +1417,20 @@ class HTTPClient:
         return self.request(r, reason=reason, json=payload)
 
     def get_invite(
-        self, invite_id: str, *, with_counts: bool = True, with_expiration: bool = True
+        self,
+        invite_id: str,
+        *,
+        with_counts: bool = True,
+        with_expiration: bool = True,
+        event_id: Snowflake = None
     ) -> Response[invite.Invite]:
         params = {
             'with_counts': int(with_counts),
             'with_expiration': int(with_expiration),
         }
+        if event_id:
+            params['guild_scheduled_event_id'] = int(event_id)
+
         return self.request(Route('GET', '/invites/{invite_id}', invite_id=invite_id), params=params)
 
     def invites_from(self, guild_id: Snowflake) -> Response[List[invite.Invite]]:
@@ -1930,6 +1939,93 @@ class HTTPClient:
             guild_id=guild_id,
         )
         return self.request(r, json=payload)
+
+    # Guild Scheduled Events
+
+    def get_guild_events(self, guild_id: Snowflake, *, with_user_count: bool = False) -> Response[List[guild_events.GuildEvent]]:
+        r = Route('GET', '/guilds/{guild_id}/scheduled-events', guild_id=guild_id)
+        return self.request(r, params={'with_user_count': int(with_user_count)})
+
+    def get_guild_event(self, guild_id: Snowflake, event_id: Snowflake, *, with_user_count: bool = False) -> Response[guild_events.GuildEvent]:
+        r = Route('GET', '/guilds/{guild_id}/scheduled-events/event_id', guild_id=guild_id, event_id=event_id)
+        return self.request(r, params={'with_user_count': int(with_user_count)})
+
+    def create_guild_event(
+        self,
+        guild_id: Snowflake,
+        *,
+        reason: Optional[str] = None,
+        **payload,
+    ) -> Response[guild_events.GuildEvent]:
+        r = Route('POST', '/guilds/{guild_id}/scheduled-events', guild_id=guild_id)
+        valid_keys = (
+            'channel_id',
+            'name',
+            'privacy_level',
+            'scheduled_start_time',
+            'scheduled_end_time',
+            'description',
+            'entity_type',
+            'status',
+            'entity_metadata',
+        )
+        payload = {k: v for k, v in payload.items() if k in valid_keys}
+
+        return self.request(r, json=payload, reason=reason)
+
+    def edit_guild_event(
+        self,
+        guild_id: Snowflake,
+        event_id: Snowflake,
+        reason: Optional[str] = None,
+        **payload: Any
+    ) -> Response[guild_events.GuildEvent]:
+        valid_keys = (
+            'channel_id',
+            'name',
+            'privacy_level',
+            'scheduled_start_time',
+            'scheduled_end_time',
+            'description',
+            'entity_type',
+            'status',
+            'entity_metadata',
+        )
+        payload = {k: v for k, v in payload.items() if k in valid_keys}
+        r = Route('PATCH', '/guilds/{guild_id}/scheduled-events/{event_id}', guild_id=guild_id, event_id=event_id)
+        return self.request(r, json=payload, reason=reason)
+
+    def delete_guild_event(
+        self,
+        guild_id: Snowflake,
+        event_id: Snowflake,
+        reason: Optional[str] = None,
+    ) -> Response[None]:
+        r = Route('DELETE', '/guilds/{guild_id}/scheduled-events/{event_id}', guild_id=guild_id, event_id=event_id)
+        return self.request(r, reason=reason)
+
+    def get_guild_event_users(
+        self,
+        guild_id: Snowflake,
+        event_id: Snowflake,
+        limit: int,
+        before: Optional[Snowflake] = None,
+        after: Optional[Snowflake] = None,
+        with_member: Optional[bool] = None
+    ) -> Response[List[guild_events.GuildEventUser]]:
+        params: Dict[str, Any] = {
+            'limit': int(limit),
+        }
+
+        if before is not None:
+            params['before'] = int(before)
+        if after is not None:
+            params['after'] = int(after)
+        if with_member is not None:
+            params['with_member'] = int(with_member)
+
+        r = Route('GET', '/guilds/{guild_id}/scheduled-events/{event_id}/users', guild_id=guild_id, event_id=event_id)
+        return self.request(r, params=params)
 
     # Misc
 

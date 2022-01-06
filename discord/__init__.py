@@ -36,6 +36,7 @@ from .errors import *
 from .file import *
 from .flags import *
 from .guild import *
+from .guild_events import *
 from .integrations import *
 from .interactions import *
 from .invite import *

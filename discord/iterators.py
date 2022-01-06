@@ -39,6 +39,7 @@ __all__ = (
     'AuditLogIterator',
     'GuildIterator',
     'MemberIterator',
+    'GuildEventUserIterator',
 )
 
 if TYPE_CHECKING:
@@ -62,7 +63,6 @@ if TYPE_CHECKING:
     from .member import Member
     from .user import User
     from .message import Message
-    from .audit_logs import AuditLogEntry
     from .guild import Guild
     from .threads import Thread
     from .abc import Snowflake
@@ -751,3 +751,97 @@ class ArchivedThreadIterator(_AsyncIterator['Thread']):
     def create_thread(self, data: ThreadPayload) -> Thread:
         from .threads import Thread
         return Thread(guild=self.guild, state=self.guild._state, data=data)
+
+
+class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
+    def __init__(self, event, limit, with_member=False, before=None, after=None):
+        if isinstance(before, datetime.datetime):
+            before = Object(id=time_snowflake(before, high=False))
+        if isinstance(after, datetime.datetime):
+            after = Object(id=time_snowflake(after, high=True))
+
+        self.event = event
+        self.limit = limit
+        self.with_member = with_member
+        self.before = before
+        self.after = after
+
+        self.users = asyncio.Queue()
+        self.get_users = self.event._state.http.get_guild_event_users
+
+        self._filter = None
+
+        if self.before and self.after:
+            self._retrieve_users = self._retrieve_users_before_strategy  # type: ignore
+            self._filter = lambda d: int(d['user']['id']) > self.after.id
+        elif self.after:
+            self._retrieve_users = self._retrieve_users_after_strategy  # type: ignore
+        else:
+            self._retrieve_users = self._retrieve_users_before_strategy  # type: ignore
+
+    async def next(self) -> Union[User, Member]:
+        if self.users.empty():
+            await self.fill_users()
+
+        try:
+            x = self.users.get_nowait()
+            return x
+        except asyncio.QueueEmpty:
+            raise NoMoreItems()
+
+    def _get_retrieve(self):
+        l = self.limit
+        if l is None or l > 100:
+            r = 100
+        else:
+            r = l
+        self.retrieve = r
+        return r > 0
+
+    def member_from_payload(self, data):
+        from .member import Member
+
+        member = data.pop('member', None)
+        member['user'] = data['user']
+
+        return Member(data=member, guild=self.event.guild, state=self.event._state)
+
+    def user_from_payload(self, data):
+        from .user import User
+
+        return User(state=self.event._state, data=data['user'])
+
+    async def fill_users(self):
+        if self._get_retrieve():
+            data = await self._retrieve_users(self.retrieve)
+            if not data:
+                return
+            if self._filter:
+                data = filter(self._filter, data)
+            if self.limit is not None:
+                self.limit -= self.retrieve
+
+            for element in data:
+                from_payload = self.member_from_payload if 'member' in element else self.user_from_payload
+                await self.users.put(from_payload(element))
+
+    async def _retrieve_users(self):
+        raise NotImplementedError
+
+    async def _retrieve_users_before_strategy(self, retrieve):
+        before = self.before.id if self.before else None
+        data = await self.get_users(guild_id=self.event.guild.id, event_id=self.event.id, limit=retrieve, with_member=self.with_member, before=before)
+        if data:
+            if self.limit is not None:
+                self.limit -= self.retrieve
+            self.before = Object(int(data[0]['user']['id']))
+        return data
+
+    async def _retrieve_users_after_strategy(self, retrieve):
+        after = self.after.id if self.after else None
+        data = await self.get_users(guild_id=self.event.guild.id, event_id=self.event.id, limit=retrieve, with_member=self.with_member, after=after)
+        if data:
+            if self.limit is not None:
+                self.limit -= self.retrieve
+            self.after = Object(int(data[-1]['user']['id']))
+        return data
