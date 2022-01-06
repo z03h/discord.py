@@ -3097,8 +3097,8 @@ class Guild(Hashable):
 
         Returns
         --------
-        :class:`ScheduledEvent`
-            The created scheduled event.
+        :class:`GuildEvent`
+            The created guild event.
         """
 
         payload: Dict[str, Any] = {

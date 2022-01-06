@@ -220,13 +220,13 @@ class GuildEvent(Hashable):
     ):
         """|coro|
 
-        Edits the Scheduled Event's data
+        Edits the event.
 
         All parameters are optional unless ``location.type`` is
-        :attr:`ScheduledEventLocationType.external`, then ``end_time``
+        :attr:`GuildEventLocationType.external`, then ``end_time``
         is required.
 
-        Will return a new :class:`.ScheduledEvent` object if applicable.
+        Will return a new :class:`.GuildEvent` object if applicable.
 
         Parameters
         -----------
@@ -339,15 +339,9 @@ class GuildEvent(Hashable):
             async for user in event.users(limit=100):
                 print(user.name)
 
-        Flattening into a list: ::
+        Flattening all users as members into a list: ::
 
-            users = await event.users(limit=100).flatten()
-            # users is now a list of Users
-
-        Getting members instead of user objects: ::
-
-            async for member in event.users(limit=100, with_member=True):
-                print(member.display_name)
+            users = await event.users(limit=None, with_member=True).flatten()
 
         Parameters
         -----------
