@@ -58,6 +58,7 @@ from .ui.view import ViewStore, View
 from .stage_instance import StageInstance
 from .threads import Thread, ThreadMember
 from .sticker import GuildSticker
+from  .guild_events import GuildEvent
 
 if TYPE_CHECKING:
     from .abc import PrivateChannel

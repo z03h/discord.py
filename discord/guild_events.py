@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional, Union
 from .iterators import GuildEventUserIterator
 from .channel import VoiceChannel, StageChannel
+from .errors import InvalidArgument
 from .object import Object
 import datetime
 
@@ -173,7 +174,7 @@ class GuildEvent(Hashable):
             self._location = metadata.get('location')
 
     def __repr__(self):
-        return f'<GuildEvent id={self.id} name={self.name}> status={self.status}'
+        return f'<GuildEvent id={self.id} name={self.name} location={self.location} status={self.status} guild={self.guild}>'
 
     def __str__(self):
         return self.name
@@ -249,6 +250,8 @@ class GuildEvent(Hashable):
 
         Raises
         -------
+        InvalidArgument
+            Event location type is external and doesn't have an end time set.
         Forbidden
             You do not have the Manage Events permission.
         HTTPException
@@ -277,8 +280,10 @@ class GuildEvent(Hashable):
             if isinstance(location, str):
                 # external
                 payload['entity_metadata'] = {'location': location}
+                payload['channel_id'] = None
                 payload['entity_type'] = int(GuildEventLocationType.external)
             else:
+                payload['entity_metadata'] = None
                 try:
                     payload['channel_id'] = location.id
                 except AttributeError:
@@ -295,17 +300,20 @@ class GuildEvent(Hashable):
             payload["scheduled_start_time"] = start_time.isoformat()
 
         if end_time is not MISSING:
-            payload["scheduled_end_time"] = end_time.isoformat()
+            payload["scheduled_end_time"] = end_time.isoformat() if end_time is not None else end_time
+        if isinstance(location, str) and not self.end_time and not end_time:
+            raise InvalidArgument('end_time must be provided for events with external location type')
 
         if payload:
             data = await self._state.http.edit_guild_event(self.guild.id, self.id, reason=reason, **payload)
             return GuildEvent(data=data, guild=self.guild, state=self._state)
+
         return self
 
     async def delete(self, *, reason: Optional[str] = None):
         """|coro|
 
-        Cancels and deleted this event.
+        Cancels and deletes this event.
 
         Parameters
         -----------
