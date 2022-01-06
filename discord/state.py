@@ -48,7 +48,7 @@ from .channel import _channel_factory
 from .raw_models import *
 from .member import Member
 from .role import Role
-from .enums import ChannelType, try_enum, Status
+from .enums import ChannelType, try_enum, Status, GuildEventStatus
 from .flags import ApplicationFlags, Intents, MemberCacheFlags
 from .object import Object
 from .invite import Invite
@@ -1126,6 +1126,75 @@ class ConnectionState:
         # guild won't be None here
         guild.stickers = tuple(map(lambda d: self.store_sticker(guild, d), data['stickers']))  # type: ignore
         self.dispatch('guild_stickers_update', guild, before_stickers, guild.stickers)
+
+    def parse_guild_scheduled_event_create(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_CREATE referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        event = GuildEvent(state=self, guild=guild, data=data)
+        guild._add_event(event)
+        self.dispatch('guild_event_create', event)
+
+    def parse_guild_scheduled_event_update(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_UPDATE referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        event = guild.get_event(int(data['id']))
+        if event is not None:
+            old_event = copy.copy(event)
+            event._update(guild, data, self)
+            self.dispatch('guild_event_update', old_event, event)
+        else:
+            event = GuildEvent(state=self, guild=guild, data=data)
+            guild._add_event(event)
+
+    def parse_guild_scheduled_event_delete(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_DELETE referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        event = guild.get_event(int(data['id']))
+        if event is not None:
+            guild._remove_event(event)
+            event.status = GuildEventStatus.canceled
+        else:
+            event = GuildEvent(state=self, guild=guild, data=data)
+        self.dispatch('guild_event_delete', event)
+
+    def parse_guild_scheduled_event_user_add(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_USER_ADD referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        payload = RawGuildEventMemberEvent(data, 'USER_ADD')
+        self.dispatch('raw_guild_event_user_add', payload)
+
+        member = guild.get_member(payload.user_id)
+        if member is not None:
+            event = guild.get_event(int(data['guild_scheduled_event_id']))
+            if event is not None:
+                self.dispatch('guild_event_user_add', event, member)
+
+    def parse_guild_scheduled_event_user_remove(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_USER_ADD referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        payload = RawGuildEventMemberEvent(data, 'USER_REMOVE')
+        self.dispatch('raw_guild_event_user_add', payload)
+
+        member = guild.get_member(payload.user_id)
+        if member is not None:
+            event = guild.get_event(int(data['guild_scheduled_event_id']))
+            if event is not None:
+                self.dispatch('guild_event_user_add', event, member)
 
     def _get_create_guild(self, data):
         if data.get('unavailable') is False:

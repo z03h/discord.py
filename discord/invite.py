@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from .guild import Guild
     from .abc import GuildChannel
     from .user import User
+    from .guild_events import GuildEvent
 
     InviteGuildType = Union[Guild, 'PartialInviteGuild', Object]
     InviteChannelType = Union[GuildChannel, 'PartialInviteChannel', Object]
@@ -304,6 +305,11 @@ class Invite(Hashable):
         The embedded application the invite targets, if any.
 
         .. versionadded:: 2.0
+
+    event: Optional[:class:`GuildEvent`]
+        The event tied to this invite, if any.
+
+        .. versionadded:: 2.0
     """
 
     __slots__ = (
@@ -324,6 +330,8 @@ class Invite(Hashable):
         'approximate_presence_count',
         'target_application',
         'expires_at',
+        '_event',
+        'event_id',
     )
 
     BASE = 'https://discord.gg'
@@ -365,6 +373,20 @@ class Invite(Hashable):
         self.target_application: Optional[PartialAppInfo] = (
             PartialAppInfo(data=application, state=state) if application else None
         )
+
+        event = data.get('guild_scheduled_event')
+        if event:
+            try:
+                event = self.guild.get_event(int(event['id']))
+            except Exception:
+                from .guild_events import GuildEvent
+                event = GuildEvent(guild=self.guild, state=state, data=event)
+                guild._add_event(event)
+
+            self._event: Optional[GuildEvent] = event
+            self.event_id = self.event.id
+        else:
+            self._event = self.event_id = None
 
     @classmethod
     def from_incomplete(cls: Type[I], *, state: ConnectionState, data: InvitePayload) -> I:
@@ -451,7 +473,23 @@ class Invite(Hashable):
     @property
     def url(self) -> str:
         """:class:`str`: A property that retrieves the invite URL."""
-        return self.BASE + '/' + self.code
+        url = f'{self.BASE}/{self.code}'
+        if self.event:
+            url += f'?event={self.event.id}'
+        return url
+
+    @property
+    def event(self) -> GuildEvent:
+        """The event where assocaited with this invite"""
+        return self._event
+
+    @event.setter
+    def event(self, event: Optional[GuildEvent]):
+        if event is None:
+            self._event = self.event_id = None
+        else:
+            self._event = event
+            self.event_id = event.id
 
     async def delete(self, *, reason: Optional[str] = None):
         """|coro|
