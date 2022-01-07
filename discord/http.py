@@ -188,7 +188,7 @@ class HTTPClient:
         self.proxy_auth: Optional[aiohttp.BasicAuth] = proxy_auth
         self.use_clock: bool = not unsync_clock
 
-        user_agent = 'DiscordBot (https://github.com/Rapptz/discord.py {0}) Python/{1[0]}.{1[1]} aiohttp/{2}'
+        user_agent = 'DiscordBot (https://github.com/z03h/discord.py {0}) Python/{1[0]}.{1[1]} aiohttp/{2}'
         self.user_agent: str = user_agent.format(__version__, sys.version_info, aiohttp.__version__)
 
     def recreate(self) -> None:
@@ -1947,7 +1947,7 @@ class HTTPClient:
         return self.request(r, params={'with_user_count': int(with_user_count)})
 
     def get_guild_event(self, guild_id: Snowflake, event_id: Snowflake, *, with_user_count: bool = False) -> Response[guild_events.GuildEvent]:
-        r = Route('GET', '/guilds/{guild_id}/scheduled-events/event_id', guild_id=guild_id, event_id=event_id)
+        r = Route('GET', '/guilds/{guild_id}/scheduled-events/{event_id}', guild_id=guild_id, event_id=event_id)
         return self.request(r, params={'with_user_count': int(with_user_count)})
 
     def create_guild_event(

@@ -776,12 +776,12 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
         self._filter = None
 
         if self.before and self.after:
-            self._retrieve_users = self._retrieve_users_before_strategy  # type: ignore
-            self._filter = lambda d: int(d['user']['id']) > self.after.id
-        elif self.after:
             self._retrieve_users = self._retrieve_users_after_strategy  # type: ignore
-        else:
+            self._filter = lambda d: int(d['user']['id']) <= self.before.id
+        elif self.before:
             self._retrieve_users = self._retrieve_users_before_strategy  # type: ignore
+        else:
+            self._retrieve_users = self._retrieve_users_after_strategy  # type: ignore
 
     async def next(self) -> Union[User, Member]:
         if self.users.empty():
@@ -823,7 +823,7 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
             if self.limit is not None:
                 self.limit -= self.retrieve
 
-            if not data:
+            if not data or len(data) != self.retrieve:
                 self.limit = 0
 
             for element in data:
@@ -839,7 +839,9 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
         if data:
             if self.limit is not None:
                 self.limit -= self.retrieve
-            self.before = Object(int(data[0]['user']['id']))
+            self.after = Object(int(data[-1]['user']['id']))
+            self._retrieve_users = self._retrieve_users_after_strategy
+
         return data
 
     async def _retrieve_users_after_strategy(self, retrieve):
@@ -849,4 +851,5 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
             if self.limit is not None:
                 self.limit -= self.retrieve
             self.after = Object(int(data[-1]['user']['id']))
+
         return data
