@@ -3047,11 +3047,58 @@ class Guild(Hashable):
         await ws.voice_state(self.id, channel_id, self_mute, self_deaf)
 
     async def fetch_guild_events(self, with_user_count=False) -> List[GuildEvent]:
+        """|coro|
+
+        Fetches all events scheduled in this guild.
+
+        .. versionadded:: 2.0
+
+        Parameters
+        -----------
+        with_user_count: :class:`bool`
+            Whether to fetch events with the number of interested users.
+            :attr:`GuildEvent.user_count` requires this to be set to ``True`` to get a value.
+
+        Raises
+        -------
+        HTTPException
+            Fetching the events failed.
+
+        Returns
+        --------
+        List[:class:`GuildEvent`]
+            The events in this guild.
+        """
+
         events = await self._state.http.get_guild_events(self.id, with_user_count=with_user_count)
         return [GuildEvent(data=data, guild=self, state=self._state) for data in events]
 
-    async def fetch_guild_event(self, id: int, /, with_user_count=False) -> GuildEvent:
-        data = await self._state.http.get_guild_event(self.id, id, with_user_count=with_user_count)
+    async def fetch_guild_event(self, event_id: int, /, with_user_count=False) -> GuildEvent:
+        """|coro|
+
+        Fetches a guild event by ID.
+
+        Parameters
+        -----------
+        event_id: :class:`int`
+            The ID of the event to fetch.
+        with_user_count: :class:`bool`
+            Whether to fetch events with the number of interested users.
+            :attr:`GuildEvent.user_count` requires this to be set to ``True`` to get a value.
+
+        Raises
+        -------
+        Forbidden
+            Missing permissions to see event.
+        HTTPException
+            Fetching the event failed.
+
+        Returns
+        --------
+        :class:`GuildEvent`
+            The events with matching ID.
+        """
+        data = await self._state.http.get_guild_event(self.id, event_id, with_user_count=with_user_count)
         return GuildEvent(data=data, guild=self, state=self._state)
 
     async def create_event(
