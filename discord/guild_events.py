@@ -352,7 +352,8 @@ class GuildEvent(Hashable):
         """Returns an :class:`AsyncIterator` representing the users or members
         subscribed to the event.
 
-        Users are returning in ascending order by their ID.
+        If ``before`` is provided, users are returned in descending order by their ID.
+        otherwise users are returning in ascending order by their ID.
 
         Examples
         ---------
