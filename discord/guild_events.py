@@ -349,7 +349,9 @@ class GuildEvent(Hashable):
         before: Optional[Union[Snowflake, datetime.datetime]] = None,
         after: Optional[Union[Snowflake, datetime.datetime]] = None,
     ) -> AsyncIterator:
-        """Returns an :class:`AsyncIterator` representing the users or members subscribed to the event.
+        """Returns an :class:`AsyncIterator` representing the users or members
+        subscribed to the event.
+
         Users are returning in ascending order by their ID.
 
         Examples
