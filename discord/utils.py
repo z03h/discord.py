@@ -688,6 +688,34 @@ def resolve_invite(invite: Union[Invite, str]) -> str:
     return invite
 
 
+def resolve_invite_event(invite: Union[Invite, str]) -> Optional[int]:
+    """
+    Resolves an event ID from a :class:`~discord.Invite`, URL if available.
+
+    .. versionadded:: 2.0
+
+    Parameters
+    -----------
+    invite: Union[:class:`~discord.Invite`, :class:`str`]
+        The invite or invite url.
+
+    Returns
+    --------
+    Optional[:class:`int`]
+        The events ID code if applicable.
+    """
+    from .invite import Invite  # circular import
+
+    if isinstance(invite, Invite):
+        return invite.event.id if invite.event else None
+    else:
+        rx = r'(?:https?\:\/\/)?discord(?:\.gg|(?:app)?\.com\/invite)\/(?:.+)\?(?:event=)([0-9]+)'
+        m = re.match(rx, invite)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def resolve_template(code: Union[Template, str]) -> str:
     """
     Resolves a template code from a :class:`~discord.Template`, URL or code.
