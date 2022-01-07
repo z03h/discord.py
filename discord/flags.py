@@ -888,7 +888,8 @@ class Intents(BaseFlags):
         - :func:`on_guild_event_user_add`
         - :func:`on_guild_event_user_remove`
 
-        This also corresponds to the following:
+        This also corresponds to the following attributes and classes in terms of cache:
+        - :class:`GuildEvent`
         - :attr:`Guild.events`
         - :meth:`Guild.get_event`
         """
