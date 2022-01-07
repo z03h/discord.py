@@ -1376,8 +1376,9 @@ class Client:
             :attr:`.Invite.expires_at` field.
 
             .. versionadded:: 2.0
-        event_id: :class:`int`
-            The ID of the guild event to fetch with this invite.
+        event_id: Optional[:class:`int`]
+            The ID of the guild event to fetch with this invite. If ``None``,
+            any event ID associated with the invite url will be used instead.
 
             .. versionadded:: 2.0
 
@@ -1395,6 +1396,8 @@ class Client:
         """
 
         invite_id = utils.resolve_invite(url)
+        if event_id is None:
+            event_id = utils.resolve_invite_event(url)
         data = await self.http.get_invite(invite_id, with_counts=with_counts, with_expiration=with_expiration, event_id=event_id)
         return Invite.from_incomplete(state=self._connection, data=data)
 

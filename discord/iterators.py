@@ -780,6 +780,7 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
             self._filter = lambda d: int(d['user']['id']) <= self.before.id
         elif self.before:
             self._retrieve_users = self._retrieve_users_before_strategy  # type: ignore
+            self._filter = lambda d: int(d['user']['id']) <= self.before.id
         else:
             self._retrieve_users = self._retrieve_users_after_strategy  # type: ignore
 
