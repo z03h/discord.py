@@ -2008,6 +2008,7 @@ class HTTPClient:
         self,
         guild_id: Snowflake,
         event_id: Snowflake,
+        *,
         limit: int,
         before: Optional[Snowflake] = None,
         after: Optional[Snowflake] = None,

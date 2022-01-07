@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from .iterators import AsyncIterator
     from .types.guild_events import GuildEvent as GuildEventPayload
     from .state import ConnectionState
+    from .member import Member
 
 
 class GuildEvent(Hashable):
@@ -95,13 +96,17 @@ class GuildEvent(Hashable):
         The type of location for where this event is scheduled to take place.
     creator_id: Optional[:class:`int`]
         The ID of the user who created the event.
-        Will be  ``None`` for events created before October 25th, 2021.
-    creator: Optional[Union[:class:`Member`, :class:`User`]]
-        The member or user who created the event.
-        Will be  ``None`` for events created before October 25th, 2021.
+    creator: Optional[:class:`User`]
+        The user who created the event.
+
+        .. note::
+
+            :attr:`creator` and :attr:`creator_id`Will be  ``None`` for
+            events created before October 25th, 2021.
+
     privacy_level: :class:`GuildEventPrivacyLevel`
         The privacy level of the event.
-    user_count: optional[:class:`int`]
+    user_count: Otional[:class:`int`]
         The number of users interested in this event.
 
         .. note::
@@ -126,52 +131,51 @@ class GuildEvent(Hashable):
         'start_time',
         'end_time',
         'channel_id',
-        '_location',
         'user_count',
+        '_location',
     )
 
     def __init__(self, *, guild: Guild, data: GuildEventPayload, state: ConnectionState):
-        self._state = state
+        self._state: ConnectionState = state
+        self.guild: Guild = guild
+        self.id: int = int(data['id'])
+
         self._update(guild, data, state)
 
     def _update(self, guild, data, state):
-        self.guild = guild
 
-        self.id = utils._get_as_snowflake(data, 'id')
-        self.name = data['name']
-        self.description = data.get('description')
+        self.name: str = data['name']
+        self.description: Optional[str] = data.get('description')
 
-        self.privacy_level = try_enum(GuildEventPrivacyLevel, data['privacy_level'])
-        self.location_type = try_enum(GuildEventLocationType, data['entity_type'])
-        self.status = try_enum(GuildEventStatus, data['status'])
-        self.user_count = data.get('user_count', 0)
+        self.privacy_level: GuildEventPrivacyLevel = try_enum(GuildEventPrivacyLevel, data['privacy_level'])
+        self.location_type: GuildEventLocationType = try_enum(GuildEventLocationType, data['entity_type'])
+        self.status: GuildEventStatus = try_enum(GuildEventStatus, data['status'])
 
-        self.creator_id = utils._get_as_snowflake(data, 'creator_id')
-        self.creator = None
-        # safeguard against old events maybe not having creator_id or creator
+        self.creator_id: Optional[int] = utils._get_as_snowflake(data, 'creator_id')
+        self.creator: Optional[User] = None
+        # safeguard against old events not having creator_id or creator
         if self.creator_id:
-            try:
-                self.creator = guild.get_member(self.creator_id) or state.get_user(self.creator_id)
-            except AttributeError:
-                self.creator = state.get_user(self.creator_id)
-
+            self.creator = state.get_user(self.creator_id)
         if not self.creator:
             creator_data = data.get('creator')
             if creator_data:
                 self.creator = User(state=state, data=creator_data)
 
-        self.start_time = utils.parse_time(data['scheduled_start_time'])
-        self.end_time = utils.parse_time(data['scheduled_end_time'])
+        self.user_count: Optional[int] = data.get('user_count')
 
-        self.channel_id = utils._get_as_snowflake(data, 'channel_id')
-        metadata = data.get('event_metadata')
-        self.parse_metadata(metadata)
+        self.start_time: datetime.datetime = utils.parse_time(data['scheduled_start_time'])
+        self.end_time: Optional[datetime.datetime] = utils.parse_time(data['scheduled_end_time'])
 
-    def parse_metadata(self, metadata):
+        self.channel_id: int = utils._get_as_snowflake(data, 'channel_id')
+
+        metadata = data.get('entity_metadata')
+        self._parse_metadata(metadata)
+
+    def _parse_metadata(self, metadata):
         if not metadata:
-            self._location = None
+            self._location: Optional[str] = None
         else:
-            self._location = metadata.get('location')
+            self._location: Optional[str] = metadata.get('location')
 
     def __repr__(self):
         return f'<GuildEvent id={self.id} name={self.name} location={self.location} status={self.status} guild={self.guild}>'
@@ -181,11 +185,18 @@ class GuildEvent(Hashable):
 
     @property
     def location(self) -> Union[VoiceChannel, StageChannel, str]:
-        """The location of this event"""
+        """The external location or channel of this event"""
         return self._location or self.channel
 
     @property
-    def channel(self) -> Optional[Union[VoiceChannel, StageChannel]]:
+    def external_location(self) -> Optional[str]:
+        """The external location of this event.
+        Can be ``None`` if location type is voice or stage.
+        """
+        return self._location
+
+    @property
+    def channel(self) -> Optional[Union[VoiceChannel, StageChannel, Object]]:
         """The channel where this event is scheduled to take place.
         Can be ``None`` if location type is external.
         """

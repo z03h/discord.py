@@ -4118,11 +4118,19 @@ PartialWebhookGuild
     :members:
 
 PartialWebhookChannel
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 .. attributetable:: PartialWebhookChannel
 
 .. autoclass:: PartialWebhookChannel()
+    :members:
+
+RawGuildEventMemberEvent
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributeable:: RawGuildEventMemberEvent
+
+.. autoclass:: RawGuildEventMemberEvent()
     :members:
 
 .. _discord_api_data:
