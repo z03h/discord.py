@@ -60,6 +60,10 @@ if TYPE_CHECKING:
         Thread as ThreadPayload,
     )
 
+    from .types.guild_events import (
+        GuildEventUser as GuildEventUserPayload,
+    )
+
     from .member import Member
     from .user import User
     from .message import Message
@@ -814,12 +818,13 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
     async def fill_users(self):
         if self._get_retrieve():
             data = await self._retrieve_users(self.retrieve)
-            if not data:
-                return
             if self._filter:
                 data = filter(self._filter, data)
             if self.limit is not None:
                 self.limit -= self.retrieve
+
+            if not data:
+                self.limit = 0
 
             for element in data:
                 from_payload = self.member_from_payload if 'member' in element else self.user_from_payload
@@ -830,7 +835,7 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
 
     async def _retrieve_users_before_strategy(self, retrieve):
         before = self.before.id if self.before else None
-        data = await self.get_users(guild_id=self.event.guild.id, event_id=self.event.id, limit=retrieve, with_member=self.with_member, before=before)
+        data: List[GuildEventUserPayload] = await self.get_users(guild_id=self.event.guild.id, event_id=self.event.id, limit=retrieve, with_member=self.with_member, before=before)
         if data:
             if self.limit is not None:
                 self.limit -= self.retrieve
@@ -839,7 +844,7 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
 
     async def _retrieve_users_after_strategy(self, retrieve):
         after = self.after.id if self.after else None
-        data = await self.get_users(guild_id=self.event.guild.id, event_id=self.event.id, limit=retrieve, with_member=self.with_member, after=after)
+        data: List[GuildEventUserPayload] = await self.get_users(guild_id=self.event.guild.id, event_id=self.event.id, limit=retrieve, with_member=self.with_member, after=after)
         if data:
             if self.limit is not None:
                 self.limit -= self.retrieve

@@ -3059,9 +3059,9 @@ class Guild(Hashable):
         *,
         name: str,
         description: str = MISSING,
+        location: Union[str, VoiceChannel, StageChannel],
         start_time: datetime,
         end_time: datetime = MISSING,
-        location: Union[str, VoiceChannel, StageChannel],
         privacy_level: GuildEventPrivacyLevel = GuildEventPrivacyLevel.guild_only,
         reason: Optional[str] = None
     ) -> GuildEvent:
@@ -3129,6 +3129,6 @@ class Guild(Hashable):
         if end_time is not MISSING:
             payload["scheduled_end_time"] = end_time.isoformat()
 
-        data = await self._state.http.create_scheduled_event(guild_id=self.id, reason=reason, **payload)
+        data = await self._state.http.create_guild_event(guild_id=self.id, reason=reason, **payload)
         event = GuildEvent(state=self._state, guild=self, data=data)
         return event
