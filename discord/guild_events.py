@@ -350,6 +350,7 @@ class GuildEvent(Hashable):
         after: Optional[Union[Snowflake, datetime.datetime]] = None,
     ) -> AsyncIterator:
         """Returns an :class:`AsyncIterator` representing the users or members subscribed to the event.
+        Users are returning in ascending order by their ID.
 
         Examples
         ---------
@@ -358,17 +359,16 @@ class GuildEvent(Hashable):
             async for user in event.users(limit=100):
                 print(user.name)
 
-        Flattening all users as members into a list: ::
+        Flattening all members into a list: ::
 
-            users = await event.users(limit=None, with_member=True).flatten()
+            members = await event.users(limit=None, with_member=True).flatten()
 
         Parameters
         -----------
         limit: Optional[:class:`int`]
             The maximum number of results to return.
         with_member: Optional[:class:`bool`]
-            Whether to fetch :class:`Member` objects instead of user objects.
-            There may still be :class:`User` objects.
+            Whether to fetch :class:`Member` objects instead of :class:`User` objects.
         before: Optional[Union[:class:`abc.Snowflake`, :class:`datetime.datetime`]]
             Retrieves users before this date or object. If a datetime is provided,
             it is recommended to use a UTC aware datetime. If the datetime is naive,
