@@ -425,6 +425,9 @@ Converters
 .. autoclass:: discord.ext.commands.PartialMessageableConverter
     :members:
 
+.. autoclass:: discord.ext.commands.GuildEventConverter
+    :members:
+
 .. autoclass:: discord.ext.commands.clean_content
     :members:
 

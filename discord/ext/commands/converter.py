@@ -76,6 +76,7 @@ __all__ = (
     'GuildChannelConverter',
     'GuildStickerConverter',
     'PartialMessageableConverter',
+    'GuildEventConverter',
     'clean_content',
     'Greedy',
     'run_converters',
@@ -876,7 +877,8 @@ class GuildStickerConverter(IDConverter[discord.GuildSticker]):
 
 
 class PartialMessageableConverter(IDConverter[discord.PartialMessageable]):
-    """Converts to a :class:`discord.PartialMessageable`.
+    """Converts ID or mention to a :class:`discord.PartialMessageable`.
+
     .. versionadded:: 2.0
     """
 
@@ -885,6 +887,47 @@ class PartialMessageableConverter(IDConverter[discord.PartialMessageable]):
         if not match:
             raise ChannelNotFound(argument)
         return ctx.bot.get_partial_messageable(int(match.group(1)))
+
+
+class GuildEventConverter(IDConverter[discord.GuildEvent]):
+    """Converts to a :class:`discord.GuildEvent`.
+
+    .. versionadded:: 2.0
+
+    All lookups are done for the local guild.
+    If in a DM context, searches all guilds for a matching event.
+
+    The lookup strategy is as follows (in order):
+
+    1. Lookup by ID.
+    2. Lookup by name
+    """
+
+    async def convert(self, ctx: Context, argument: str) -> discord.GuildEvent:
+        guild = ctx.guild
+        match = self._get_id_match(argument)
+        result = None
+
+        if match:
+            if guild:
+                result = guild.get_event(int(match.group(1)))
+            else:
+                for guild in ctx.bot.guilds:
+                    result = guild.get_event(int(match.group(1)))
+                    if result:
+                        break
+        else:
+            if guild:
+                result = discord.utils.get(guild.events, name=argument)
+            else:
+                for guild in ctx.bot.guilds:
+                    result = discord.utils.get(guild.events, name=argument)
+                    if result:
+                        break
+        if result:
+            return result
+
+        raise GuildEventNotFound(argument)
 
 
 class clean_content(Converter[str]):
@@ -1078,6 +1121,7 @@ CONVERTER_MAPPING: Dict[Type[Any], Any] = {
     discord.abc.GuildChannel: GuildChannelConverter,
     discord.GuildSticker: GuildStickerConverter,
     discord.PartialMessageable: PartialMessageableConverter,
+    discord.GuildEvent: GuildEventConverter,
 }
 
 
