@@ -395,6 +395,7 @@ A lot of discord models work out of the gate as a parameter:
 - :class:`Thread` (since v2.0)
 - :class:`GuildSticker` (since v2.0)
 - :class:`PartialMessageable` (since v2.0)
+- :class:`GuildEvent` (since v2.0)
 
 Having any of these set as the converter will intelligently convert the argument to the appropriate target type you
 specify.
@@ -446,6 +447,8 @@ converter is given below:
 | :class:`Thread`              | :class:`~ext.commands.ThreadConverter`              |
 +------------------------------+-----------------------------------------------------+
 | :class:`GuildSticker`        | :class:`~ext.commands.GuildStickerConverter`        |
++------------------------------+-----------------------------------------------------+
+| :class:`GuildEvent`          | :class:`~ext.commands.GuildEventConverter`          |
 +------------------------------+-----------------------------------------------------+
 
 By providing the converter it allows us to use them as building blocks for another converter:

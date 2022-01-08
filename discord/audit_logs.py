@@ -232,6 +232,7 @@ class AuditLogChanges:
         'communication_disabled_until':  ('timeout', _transform_timestamp),
         'status':                        (None, _enum_transformer(enums.GuildEventStatus)),
         'entity_type':                   ('location_type', _enum_transformer(enums.GuildEventLocationType)),
+        'location':                      ('external_location', None)
     }
     # fmt: on
 
