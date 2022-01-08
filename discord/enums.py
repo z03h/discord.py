@@ -668,6 +668,8 @@ class GuildEventLocationType(Enum):
     voice = 2
     external = 3
 
+    stage = 1
+
     def __int__(self):
         return self.value
 

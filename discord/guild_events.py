@@ -94,6 +94,9 @@ class GuildEvent(Hashable):
         The status of the event.
     location_type: :class:`GuildEventLocationType`
         The type of location for where this event is scheduled to take place.
+    external_location: Optional[:class:`str`]
+        The external location of this event.
+        Will be ``None`` for events of location type ``stage_instance`` or ``voice``.
     creator_id: Optional[:class:`int`]
         The ID of the user who created the event.
     creator: Optional[:class:`User`]
@@ -132,7 +135,8 @@ class GuildEvent(Hashable):
         'end_time',
         'channel_id',
         'user_count',
-        '_location',
+        'external_location',
+        '_entity_id'
     )
 
     def __init__(self, *, guild: Guild, data: GuildEventPayload, state: ConnectionState):
@@ -151,6 +155,7 @@ class GuildEvent(Hashable):
         self.location_type: GuildEventLocationType = try_enum(GuildEventLocationType, data['entity_type'])
         self.status: GuildEventStatus = try_enum(GuildEventStatus, data['status'])
 
+        self._entity_id = utils._get_as_snowflake(data, 'entity_id')
         self.creator_id: Optional[int] = utils._get_as_snowflake(data, 'creator_id')
         self.creator: Optional[User] = None
         # safeguard against old events not having creator_id or creator
@@ -173,9 +178,9 @@ class GuildEvent(Hashable):
 
     def _parse_metadata(self, metadata):
         if not metadata:
-            self._location: Optional[str] = None
+            self.external_location: Optional[str] = None
         else:
-            self._location: Optional[str] = metadata.get('location')
+            self.external_location: Optional[str] = metadata.get('location')
 
     def __repr__(self):
         return f'<GuildEvent id={self.id} name={self.name} location={self.location} status={self.status} guild={self.guild}>'
@@ -186,14 +191,7 @@ class GuildEvent(Hashable):
     @property
     def location(self) -> Union[VoiceChannel, StageChannel, str]:
         """The external location or channel of this event"""
-        return self._location or self.channel
-
-    @property
-    def external_location(self) -> Optional[str]:
-        """The external location of this event.
-        Can be ``None`` if location type is voice or stage.
-        """
-        return self._location
+        return self.external_location or self.channel
 
     @property
     def channel(self) -> Optional[Union[VoiceChannel, StageChannel, Object]]:
@@ -292,7 +290,7 @@ class GuildEvent(Hashable):
                 # external
                 payload['entity_metadata'] = {'location': location}
                 payload['channel_id'] = None
-                payload['entity_type'] = int(GuildEventLocationType.external)
+                payload['entity_type'] = GuildEventLocationType.external.value
             else:
                 payload['entity_metadata'] = None
                 try:
@@ -301,9 +299,9 @@ class GuildEvent(Hashable):
                     raise TypeError('location must be a VoiceChannel, StageChannel, or str.')
 
                 if isinstance(location, VoiceChannel):
-                    payload['entity_type'] = int(GuildEventLocationType.voice)
+                    payload['entity_type'] = GuildEventLocationType.voice.value
                 elif isinstance(location, StageChannel):
-                    payload['entity_type'] = int(GuildEventLocationType.stage)
+                    payload['entity_type'] = GuildEventLocationType.stage_instance.value
                 else:
                     raise TypeError('location must be a VoiceChannel, StageChannel, or str.')
 
