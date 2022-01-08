@@ -216,6 +216,11 @@ class GuildEvent(Hashable):
             return None
         return self.end_time - self.start_time
 
+    @property
+    def url(self):
+        """The url for this event."""
+        return f'https://discord.com/events/{self.guild.id}/{self.id}'
+
     async def edit(
         self,
         *,

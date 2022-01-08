@@ -900,7 +900,8 @@ class GuildEventConverter(IDConverter[discord.GuildEvent]):
     The lookup strategy is as follows (in order):
 
     1. Lookup by ID.
-    2. Lookup by name
+    2. Lookup by url.
+    3. Lookup by name.
     """
 
     async def convert(self, ctx: Context, argument: str) -> discord.GuildEvent:
@@ -917,17 +918,30 @@ class GuildEventConverter(IDConverter[discord.GuildEvent]):
                     if result:
                         break
         else:
-            if guild:
-                result = discord.utils.get(guild.events, name=argument)
+            pattern = (
+                r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/events/'
+                r'(?P<guild_id>[0-9]{15,20})'
+                r'(?P<event_id>[0-9]{15,20})'
+            )
+            match = re.match(pattern, argument, flags=re.I)
+            if match:
+                if not guild:
+                    guild = ctx.bot.get_guild(int(match.group(1)))
+                if guild:
+                    event_id = int(match.group(2))
+                    result = guild.get_event(event_id)
             else:
-                for guild in ctx.bot.guilds:
+                if guild:
                     result = discord.utils.get(guild.events, name=argument)
-                    if result:
-                        break
-        if result:
-            return result
+                else:
+                    for guild in ctx.bot.guilds:
+                        result = discord.utils.get(guild.events, name=argument)
+                        if result:
+                            break
+        if result is None:
+            raise GuildEventNotFound(argument)
 
-        raise GuildEventNotFound(argument)
+        return result
 
 
 class clean_content(Converter[str]):
