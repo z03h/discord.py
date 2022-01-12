@@ -516,6 +516,10 @@ class Interaction:
         The application ID that the interaction was for.
     user: Optional[Union[:class:`User`, :class:`Member`]]
         The user or member that sent the interaction.
+    locale: Optional[:class:`str`]
+        The selected language of the invoking user.
+    guild_locale: Optional[:class:`str`]
+        The guilds preferred locale, if in a guild context.
     message: Optional[:class:`Message`]
         The message that sent this interaction.
     target: Optional[Union[:class:`User`, :class:`Member`, :class:`Message`]]
@@ -559,6 +563,8 @@ class Interaction:
         'version',
         'client',
         'value',
+        'locale',
+        'guild_locale',
         '_permissions',
         '_state',
         '_session',
@@ -584,6 +590,8 @@ class Interaction:
         self.channel_id: Optional[int] = utils._get_as_snowflake(data, 'channel_id')
         self.guild_id: Optional[int] = utils._get_as_snowflake(data, 'guild_id')
         self.application_id: int = int(data['application_id'])
+        self.locale: Optional[str] = data.get('locale')
+        self.guild_locale: Optional[str] = data.get('guild_locale')
 
         self.message: Optional[Message]
         try:
