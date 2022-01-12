@@ -1073,10 +1073,9 @@ class HTTPClient:
     def delete_guild(self, guild_id: Snowflake) -> Response[None]:
         return self.request(Route('DELETE', '/guilds/{guild_id}', guild_id=guild_id))
 
-    def create_guild(self, name: str, region: str, icon: Optional[str]) -> Response[guild.Guild]:
+    def create_guild(self, name: str, icon: Optional[str]) -> Response[guild.Guild]:
         payload = {
             'name': name,
-            'region': region,
         }
         if icon:
             payload['icon'] = icon
@@ -1135,10 +1134,9 @@ class HTTPClient:
     def delete_template(self, guild_id: Snowflake, code: str) -> Response[None]:
         return self.request(Route('DELETE', '/guilds/{guild_id}/templates/{code}', guild_id=guild_id, code=code))
 
-    def create_from_template(self, code: str, name: str, region: str, icon: Optional[str]) -> Response[guild.Guild]:
+    def create_from_template(self, code: str, name: str, icon: Optional[str]) -> Response[guild.Guild]:
         payload = {
             'name': name,
-            'region': region,
         }
         if icon:
             payload['icon'] = icon

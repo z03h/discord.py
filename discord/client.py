@@ -1268,7 +1268,6 @@ class Client:
         self,
         *,
         name: str,
-        region: Union[VoiceRegion, str] = VoiceRegion.us_west,
         icon: bytes = MISSING,
         code: str = MISSING,
     ) -> Guild:
@@ -1282,9 +1281,6 @@ class Client:
         ----------
         name: :class:`str`
             The name of the guild.
-        region: :class:`.VoiceRegion`
-            The region for the voice communication server.
-            Defaults to :attr:`.VoiceRegion.us_west`.
         icon: Optional[:class:`bytes`]
             The :term:`py:bytes-like object` representing the icon. See :meth:`.ClientUser.edit`
             for more details on what is expected.
@@ -1307,12 +1303,11 @@ class Client:
             added to cache.
         """
         icon_base64 = None if icon is MISSING else utils._bytes_to_base64_data(icon)
-        region_value = str(region)
 
         if code:
-            data = await self.http.create_from_template(code, name, region_value, icon_base64)
+            data = await self.http.create_from_template(code, name, icon_base64)
         else:
-            data = await self.http.create_guild(name, region_value, icon_base64)
+            data = await self.http.create_guild(name, icon_base64)
         return Guild(data=data, state=self._connection)
 
     async def fetch_stage_instance(self, channel_id: int, /) -> StageInstance:
