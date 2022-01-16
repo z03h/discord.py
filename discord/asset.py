@@ -323,6 +323,7 @@ class Asset(AssetMixin):
         """
         url = yarl.URL(self._url)
         path, _ = os.path.splitext(url.path)
+        queries = dict(url.query)
 
         if format is not MISSING:
             if self._animated:
@@ -331,19 +332,24 @@ class Asset(AssetMixin):
             else:
                 if format not in VALID_STATIC_FORMATS:
                     raise InvalidArgument(f'format must be one of {VALID_STATIC_FORMATS}')
+            if format in ('gif', 'webp'):
+                queries['quality'] = 'lossless'
             url = url.with_path(f'{path}.{format}')
 
         if static_format is not MISSING and not self._animated:
             if static_format not in VALID_STATIC_FORMATS:
                 raise InvalidArgument(f'static_format must be one of {VALID_STATIC_FORMATS}')
+            if static_format in ('gif', 'webp'):
+                queries['quality'] = 'lossless'
             url = url.with_path(f'{path}.{static_format}')
 
         if size is not MISSING:
             if not utils.valid_icon_size(size):
                 raise InvalidArgument('size must be a power of 2 between 16 and 4096')
-            url = url.with_query(size=size)
-        else:
-            url = url.with_query(url.raw_query_string)
+            queries['size'] = size
+
+        if queries:
+            url = url.update_query(**queries)
 
         url = str(url)
         return Asset(state=self._state, url=url, key=self._key, animated=self._animated)
@@ -369,7 +375,7 @@ class Asset(AssetMixin):
         if not utils.valid_icon_size(size):
             raise InvalidArgument('size must be a power of 2 between 16 and 4096')
 
-        url = str(yarl.URL(self._url).with_query(size=size))
+        url = str(yarl.URL(self._url).update_query(size=size))
         return Asset(state=self._state, url=url, key=self._key, animated=self._animated)
 
     def with_format(self, format: ValidAssetFormatTypes, /) -> Asset:
@@ -400,7 +406,10 @@ class Asset(AssetMixin):
 
         url = yarl.URL(self._url)
         path, _ = os.path.splitext(url.path)
-        url = str(url.with_path(f'{path}.{format}').with_query(url.raw_query_string))
+        url = url.with_path(f'{path}.{format}').with_query(url.raw_query_string)
+        if format in ('gif', 'webp'):
+            url = url.update_query(quality='lossless')
+        url = str(url)
         return Asset(state=self._state, url=url, key=self._key, animated=self._animated)
 
     def with_static_format(self, format: ValidStaticFormatTypes, /) -> Asset:
