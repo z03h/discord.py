@@ -1067,8 +1067,8 @@ class HTTPClient:
     def leave_guild(self, guild_id: Snowflake) -> Response[None]:
         return self.request(Route('DELETE', '/users/@me/guilds/{guild_id}', guild_id=guild_id))
 
-    def get_guild(self, guild_id: Snowflake) -> Response[guild.Guild]:
-        return self.request(Route('GET', '/guilds/{guild_id}', guild_id=guild_id))
+    def get_guild(self, guild_id: Snowflake, with_counts: bool) -> Response[guild.Guild]:
+        return self.request(Route('GET', '/guilds/{guild_id}', guild_id=guild_id), params={'with_counts': with_counts})
 
     def delete_guild(self, guild_id: Snowflake) -> Response[None]:
         return self.request(Route('DELETE', '/guilds/{guild_id}', guild_id=guild_id))
@@ -1108,6 +1108,9 @@ class HTTPClient:
         payload = {k: v for k, v in fields.items() if k in valid_keys}
 
         return self.request(Route('PATCH', '/guilds/{guild_id}', guild_id=guild_id), json=payload, reason=reason)
+
+    def get_guild_preview(self, guild_id: Snowlfake):
+        return self.request(Route('GET', '/guilds/{guild_id}/preview', guild_id=guild_id))
 
     def get_template(self, code: str) -> Response[template.Template]:
         return self.request(Route('GET', '/guilds/templates/{code}', code=code))
@@ -1966,6 +1969,7 @@ class HTTPClient:
             'entity_type',
             'status',
             'entity_metadata',
+            'image',
         )
         payload = {k: v for k, v in payload.items() if k in valid_keys}
 
@@ -1988,6 +1992,7 @@ class HTTPClient:
             'entity_type',
             'status',
             'entity_metadata',
+            'image',
         )
         payload = {k: v for k, v in payload.items() if k in valid_keys}
         r = Route('PATCH', '/guilds/{guild_id}/scheduled-events/{event_id}', guild_id=guild_id, event_id=event_id)

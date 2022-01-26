@@ -38,7 +38,7 @@ from .user import User, ClientUser
 from .invite import Invite
 from .template import Template
 from .widget import Widget
-from .guild import Guild
+from .guild import Guild, GuildPreview
 from .emoji import Emoji
 from .channel import _threaded_channel_factory, PartialMessageable
 from .enums import ChannelType
@@ -1230,7 +1230,7 @@ class Client:
         data = await self.http.get_template(code)
         return Template(data=data, state=self._connection) # type: ignore
 
-    async def fetch_guild(self, guild_id: int, /) -> Guild:
+    async def fetch_guild(self, guild_id: int, /, with_counts: bool = False) -> Guild:
         """|coro|
 
         Retrieves a :class:`.Guild` from an ID.
@@ -1248,6 +1248,9 @@ class Client:
         -----------
         guild_id: :class:`int`
             The guild's ID to fetch from.
+        with_counts: :class:`bool`
+            Whether to fetch approximate member and presence counts
+            with the guild.
 
         Raises
         ------
@@ -1261,8 +1264,34 @@ class Client:
         :class:`.Guild`
             The guild from the ID.
         """
-        data = await self.http.get_guild(guild_id)
+        data = await self.http.get_guild(guild_id, with_counts=with_counts)
         return Guild(data=data, state=self._connection)
+
+    async def fetch_guild_preview(self, guild_id: int, /) -> GuildPreview:
+        """|coro|
+
+        Retrieves a :class:`.Guildpreview`  from an ID.
+
+        You must be in the guild or the guild must be lurkable for
+        this method to work.
+
+        Parameters
+        -----------
+        guild_id: :class:`int`
+            The guild's ID to fetch from.
+
+        Raises
+        ------
+        :exc:`.HTTPException`
+            Getting the guild preview failed.
+
+        Returns
+        --------
+        :class:`.GuildPreview`
+            The guild preview from the ID.
+        """
+        data = await self.http.get_guild_preview(guild_id)
+        return GuildPreview(data=data, state=self._connection)
 
     async def create_guild(
         self,

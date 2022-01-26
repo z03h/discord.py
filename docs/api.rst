@@ -3667,6 +3667,14 @@ Guild
 
         :type: :class:`User`
 
+GuildPreview
+~~~~~~~~~~~~~
+
+.. attributetable:: GuildPreview
+
+.. autoclass:: GuildPreview()
+    :members:
+
 GuildEvent
 ~~~~~~~~~~~
 
@@ -3674,6 +3682,10 @@ GuildEvent
 
 .. autoclass:: GuildEvent()
     :members:
+    :exclude-members: users
+
+    .. automethod:: users
+        :async-for:
 
 Integration
 ~~~~~~~~~~~~

@@ -649,6 +649,11 @@ class Message(Hashable):
         .. versionadded:: 2.0
     guild: Optional[:class:`Guild`]
         The guild that the message belongs to, if applicable.
+
+    thread: Optional[:class:`Thread`]
+        The thread that was started from this message, if applicable.
+
+        .. versionadded:: 2.0
     """
 
     __slots__ = (
@@ -682,6 +687,7 @@ class Message(Hashable):
         'stickers',
         'components',
         'guild',
+        'thread'
     )
 
     if TYPE_CHECKING:
@@ -719,6 +725,10 @@ class Message(Hashable):
         self.nonce: Optional[Union[int, str]] = data.get('nonce')
         self.stickers: List[StickerItem] = [StickerItem(data=d, state=state) for d in data.get('sticker_items', [])]
         self.components: List[Component] = [_component_factory(d) for d in data.get('components', [])]
+        self.thread: Optional[Thread] = None
+        thread = data.get('thread')
+        if thread is not None:
+            self.thread = Thread(guild=channel.guild, state=state, data=thread)
 
         try:
             # if the channel doesn't have a guild attribute, we handle that
