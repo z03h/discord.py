@@ -233,7 +233,7 @@ class GuildEvent(Hashable):
         """Optional[Asset}: The cover image for this event."""
         if self._cover_image is None:
             return None
-        return Asset.from_guild_event_image(self._state, self.id, self._cover_image)
+        return Asset._from_guild_event_image(self._state, self.id, self._cover_image)
 
     async def edit(
         self,
