@@ -34,6 +34,7 @@ from .emoji import Emoji
 from .user import User
 from .threads import Thread
 from .guild_events import GuildEvent
+from .sticker import Sticker
 
 
 class Ban(TypedDict):
@@ -109,6 +110,7 @@ class _BaseGuildPreview(UnavailableGuild):
     splash: Optional[str]
     discovery_splash: Optional[str]
     emojis: List[Emoji]
+    stickers: List[Sticker]
     features: List[GuildFeature]
     description: Optional[str]
 

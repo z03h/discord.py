@@ -309,12 +309,13 @@ class Role(Hashable):
 
     @property
     def icon(self) -> Optional[Asset]:
-        """Optional[:class:`Asset`]: The asset representing the icon that is displayed next to members that have this role,
-        ``None`` if this role does not have one.
+        """Optional[:class:`Asset`]: The asset representing the icon that is
+        displayed next to members that have this role or``None`` if this role
+        does not have one.
 
         .. versionadded:: 2.0
         """
-        return self._icon and Asset._from_role_icon(self._state, role_id=self.id, icon_hash=self._icon)
+        return self._icon and Asset._from_icon(self._state, self.id, self._icon, 'role')
 
     @property
     def created_at(self) -> datetime.datetime:

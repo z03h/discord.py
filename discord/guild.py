@@ -97,7 +97,13 @@ if TYPE_CHECKING:
     import datetime
 
     from .abc import Snowflake, SnowflakeTime
-    from .types.guild import Ban as BanPayload, Guild as GuildPayload, MFALevel, GuildFeature
+    from .types.guild import (
+        Ban as BanPayload,
+        Guild as GuildPayload,
+        MFALevel,
+        GuildFeature,
+        GuildPreview as GuildPreviewPayload
+    )
     from .types.threads import (
         Thread as ThreadPayload,
     )
@@ -3284,7 +3290,7 @@ class GuildPreview(Hashable):
         '_discovery_splash',
     )
 
-    def __init__(self, *, state: ConnectionState, data):
+    def __init__(self, *, state: ConnectionState, data: GuildPreviewPayload):
         self._state: ConnectionState = state
         self.name: str = data['name']
         self.id: int = int(data['id'])
