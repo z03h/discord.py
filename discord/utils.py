@@ -1005,14 +1005,12 @@ def resolve_multipart(payload: Dict[str, Any], files: Sequence[File]) -> List[Di
                 'content_type': 'application/octet-stream',
             }
         )
-        if description := file.description:
-            attachments.append(
-                {
-                    'id': index,
-                    'description': description,
-                    'filename': file.filename,
-                }
-            )
+
+        attachment = {'id': str(index)}
+        if file.description:
+            attachment['description'] = file.description
+
+        attachments.append(attachment)
 
     form.append(
         {
