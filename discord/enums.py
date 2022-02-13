@@ -547,6 +547,7 @@ class ApplicationCommandOptionType(Enum):
     role = 8
     mentionable = 9
     number = 10
+    attachment = 11
 
     # Aliases
     sub_command = 1

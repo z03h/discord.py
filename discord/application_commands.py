@@ -24,7 +24,6 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-import functools
 import inspect
 import sys
 
@@ -44,7 +43,7 @@ from .channel import (
 from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType
 from .errors import IncompatibleCommandSignature
 from .member import Member
-from .message import Message
+from .message import Attachment, Message
 from .object import Object
 from .role import Role
 from .user import User
@@ -53,6 +52,7 @@ from .utils import get, find, MISSING, resolve_annotation
 from typing import (
     Any,
     Awaitable,
+    Callable,
     Dict,
     Final,
     Iterable,
@@ -107,6 +107,7 @@ if TYPE_CHECKING:
             Role,
             Object,
             Snowflake,
+            Attachment,
             float,
         ]
     ]
@@ -135,6 +136,7 @@ OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
     Role: ApplicationCommandOptionType.role,
     Object: ApplicationCommandOptionType.mentionable,
     Snowflake: ApplicationCommandOptionType.mentionable,
+    Attachment: ApplicationCommandOptionType.attachment,
     float: ApplicationCommandOptionType.number,
 }
 
@@ -913,7 +915,7 @@ class ApplicationCommandStore:
     async def _handle_error(
         self,
         command: ApplicationCommand,
-        interaction: discord.Interaction,
+        interaction: Interaction,
         error: Exception,
     ) -> None:
         try:
@@ -921,7 +923,7 @@ class ApplicationCommandStore:
         except Exception as exc:
             self.state.dispatch('application_command_error', interaction, exc)
 
-    async def invoke(self, command: ApplicationCommand, interaction: discord.Interaction) -> None:
+    async def invoke(self, command: ApplicationCommand, interaction: Interaction) -> None:
         self.state.dispatch('application_command', interaction)
 
         try:
@@ -1062,6 +1064,10 @@ class ApplicationCommandStore:
 
             elif type == 9:
                 value = Object(id=int(value))
+
+            elif type == 11:
+                attachment = resolved['attachments'][value]
+                value = Attachment(state=self.state, data=attachment)
 
             for k, v in command.__class__.__application_command_options__.items():
                 if v.name == option['name']:
