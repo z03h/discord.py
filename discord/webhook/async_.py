@@ -483,7 +483,7 @@ def handle_message_parameters(
     if file is not MISSING:
         files = [file]
 
-    multipart = utils.resolve_multipart(payload, files)
+    multipart = utils.resolve_multipart(payload, files) if files else None
     return ExecuteWebhookParameters(payload=payload, multipart=multipart, files=files)
 
 

@@ -1,7 +1,7 @@
 import discord
 from discord.application_commands import ApplicationCommand, ApplicationCommandTree, option
 
-from typing import Any, Generator
+from typing import Any, AsyncGenerator
 
 tree = ApplicationCommandTree(guild_id=1234)  # Replace with your guild ID, or ``None`` to commands global
 
@@ -26,7 +26,7 @@ class Animal(ApplicationCommand, name='animal', tree=tree):
     animal: str = option(description='The animal to choose')
 
     @animal.autocomplete
-    async def animal_autocomplete(self, interaction: discord.Interaction) -> Generator[Any, Any, str]:
+    async def animal_autocomplete(self, interaction: discord.Interaction) -> AsyncGenerator[Any, Any, str]:
         query = interaction.value.lower()  # Access the autocomplete query via `interaction.value`
 
         for animal in CHOICES:
