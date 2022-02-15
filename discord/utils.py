@@ -1043,6 +1043,7 @@ def resolve_multipart(
             'id': index,
             'filename': file.filename,
         }
+
         if file.description:
             attachment['description'] = file.description
 

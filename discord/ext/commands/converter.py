@@ -1162,7 +1162,7 @@ async def _actual_conversion(ctx: Context, converter, argument: str, param: insp
     except CommandError:
         raise
     except Exception as exc:
-        raise ConversionError(converter, exc) from exc
+        raise ConversionError(converter, exc, param) from exc
 
     try:
         return converter(argument)

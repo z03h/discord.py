@@ -30,6 +30,7 @@ from .components import Component, ComponentType
 from .embed import Embed
 from .channel import ChannelType
 from .member import Member
+from .message import Attachment
 from .role import Role
 from .user import User
 
@@ -160,6 +161,7 @@ class ApplicationCommandInteractionDataResolved(TypedDict, total=False):
     members: Dict[Snowflake, Member]
     roles: Dict[Snowflake, Role]
     channels: Dict[Snowflake, ApplicationCommandResolvedPartialChannel]
+    attachments: Dict[Snowflake, Attachment]
 
 
 class _ApplicationCommandInteractionDataOptional(TypedDict, total=False):

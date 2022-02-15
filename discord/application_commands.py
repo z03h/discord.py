@@ -24,7 +24,6 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-import functools
 import inspect
 import sys
 
@@ -44,7 +43,7 @@ from .channel import (
 from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType, try_enum
 from .errors import IncompatibleCommandSignature
 from .member import Member
-from .message import Message
+from .message import Attachment, Message
 from .object import Object
 from .role import Role
 from .user import User
@@ -53,6 +52,7 @@ from .utils import get, find, MISSING, resolve_annotation
 from typing import (
     Any,
     Awaitable,
+    Callable,
     Dict,
     Final,
     Iterable,
@@ -107,6 +107,7 @@ if TYPE_CHECKING:
             Role,
             Object,
             Snowflake,
+            Attachment,
             float,
         ]
     ]
@@ -135,6 +136,7 @@ OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
     Role: ApplicationCommandOptionType.role,
     Object: ApplicationCommandOptionType.mentionable,
     Snowflake: ApplicationCommandOptionType.mentionable,
+    Attachment: ApplicationCommandOptionType.attachment,
     float: ApplicationCommandOptionType.number,
 }
 
@@ -1068,6 +1070,10 @@ class ApplicationCommandStore:
                     value = Role(state=self.state, data=role_data, guild=guild)
                 except KeyError:
                     value = self._resolve_user(resolved=resolved, guild=guild, user_id=value)
+
+            elif type == 11:
+                attachment = resolved['attachments'][value]
+                value = Attachment(state=self.state, data=attachment)
 
             for k, v in command.__class__.__application_command_options__.items():
                 if v.name == option['name']:

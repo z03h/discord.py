@@ -131,9 +131,10 @@ class ConversionError(CommandError):
         The original exception that was raised. You can also get this via
         the ``__cause__`` attribute.
     """
-    def __init__(self, converter: Converter, original: Exception) -> None:
+    def __init__(self, converter: Converter, original: Exception, param: Optional[Parameter] = None) -> None:
         self.converter: Converter = converter
         self.original: Exception = original
+        self.param: Optional[Parameter] = param
 
 class UserInputError(CommandError):
     """The base exception type for errors that involve errors
