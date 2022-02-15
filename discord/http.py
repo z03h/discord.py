@@ -2042,7 +2042,7 @@ class HTTPClient:
         except HTTPException as exc:
             raise GatewayNotFound() from exc
         if zlib:
-            value = '{0}?encoding={1}&v=9&compress=zlib-stream'
+            value = '{0}?encoding={1}&v=10&compress=zlib-stream'
         else:
             value = '{0}?encoding={1}&v=10'
         return value.format(data['url'], encoding)
@@ -2054,7 +2054,7 @@ class HTTPClient:
             raise GatewayNotFound() from exc
 
         if zlib:
-            value = '{0}?encoding={1}&v=9&compress=zlib-stream'
+            value = '{0}?encoding={1}&v=10&compress=zlib-stream'
         else:
             value = '{0}?encoding={1}&v=10'
         return data['shards'], value.format(data['url'], encoding)
