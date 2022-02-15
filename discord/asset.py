@@ -231,17 +231,6 @@ class Asset(AssetMixin):
         )
 
     @classmethod
-    def _from_role_icon(cls, state, role_id: int, icon_hash: str) -> Asset:
-        animated = icon_hash.startswith('a_')
-        format = 'gif' if animated else 'png'
-        return cls(
-            state,
-            url=f'{cls.BASE}/role-icons/{role_id}/{icon_hash}.{format}',
-            key=icon_hash,
-            animated=animated,
-        )
-
-    @classmethod
     def _from_sticker_banner(cls, state, banner: int) -> Asset:
         return cls(
             state,
@@ -258,6 +247,17 @@ class Asset(AssetMixin):
             state,
             url=f'{cls.BASE}/banners/{user_id}/{banner_hash}.{format}?size=512',
             key=banner_hash,
+            animated=animated
+        )
+
+    @classmethod
+    def _from_guild_event_image(cls, state, event_id: int, image_hash: str) -> Asset:
+        animated = image_hash.startswith('a_')
+        format = 'gif' if animated else 'png'
+        return cls(
+            state,
+            url=f'{cls.BASE}/guild-events/{event_id}/{image_hash}.{format}?size=1024',
+            key=image_hash,
             animated=animated
         )
 

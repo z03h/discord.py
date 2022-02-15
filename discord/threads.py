@@ -92,6 +92,13 @@ class Thread(Messageable, Hashable):
         The parent :class:`TextChannel` ID this thread belongs to.
     owner_id: :class:`int`
         The user's ID that created this thread.
+    created_at: Optional[:class:`datetime.datetime`]
+        When the thread was created.
+
+        .. note::
+
+            Only available for threads created after 9 January 2022.
+
     last_message_id: Optional[:class:`int`]
         The last message ID of the message sent to this thread. It may
         *not* point to an existing or valid message.
@@ -140,6 +147,7 @@ class Thread(Messageable, Hashable):
         'invitable',
         'auto_archive_duration',
         'archive_timestamp',
+        'created_at'
     )
 
     def __init__(self, *, guild: Guild, state: ConnectionState, data: ThreadPayload):
@@ -185,6 +193,7 @@ class Thread(Messageable, Hashable):
         self.archive_timestamp = parse_time(data['archive_timestamp'])
         self.locked = data.get('locked', False)
         self.invitable = data.get('invitable', True)
+        self.created_at = parse_time(data.get('create_timestamp'))
 
     def _update(self, data):
         try:

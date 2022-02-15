@@ -46,6 +46,7 @@ class GuildEvent(TypedDict):
     creator: Optional[User]
     entity_type: GuildEventLocationType
     privacy_level: GuildEventPrivacyLevel
+    image: Optional[str]
 
 
 class GuildEventUser(TypedDict):

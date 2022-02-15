@@ -435,7 +435,9 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         of parameters in that they are passed to the :class:`Command` or
         subclass constructors, sans the name and callback.
         """
+        cog = self.cog
         self.__init__(self.callback, **dict(self.__original_kwargs__, **kwargs))
+        self.cog = cog  # reset cog back into self
 
     async def __call__(self, context: Context, *args: P.args, **kwargs: P.kwargs) -> T:
         """|coro|

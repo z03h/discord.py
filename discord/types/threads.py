@@ -66,6 +66,7 @@ class Thread(_ThreadOptional):
     message_count: int
     rate_limit_per_user: int
     thread_metadata: ThreadMetadata
+    create_timestamp: str
 
 
 class ThreadPaginationPayload(TypedDict):

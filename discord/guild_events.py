@@ -29,6 +29,7 @@ from .iterators import GuildEventUserIterator
 from .channel import VoiceChannel, StageChannel
 from .errors import InvalidArgument
 from .object import Object
+from .asset import Asset
 import datetime
 
 from . import utils
@@ -83,6 +84,10 @@ class GuildEvent(Hashable):
         The name of the  event.
     description: Optional[:class:`str`]
         The description of the  event.
+    cover_image: Optional[:class:`Asset`]
+        The cover image of the event.
+
+        .. versionadded:: 2.0
     start_time: :class:`datetime.datetime`
         The time when the event will start
     end_time: Optional[:class:`datetime.datetime`]
@@ -136,7 +141,8 @@ class GuildEvent(Hashable):
         'channel_id',
         'user_count',
         'external_location',
-        '_entity_id'
+        '_entity_id',
+        '_cover_image',
     )
 
     def __init__(self, *, guild: Guild, data: GuildEventPayload, state: ConnectionState):
@@ -147,7 +153,6 @@ class GuildEvent(Hashable):
         self._update(guild, data, state)
 
     def _update(self, guild, data, state):
-
         self.name: str = data['name']
         self.description: Optional[str] = data.get('description')
 
@@ -173,6 +178,8 @@ class GuildEvent(Hashable):
 
         self.channel_id: int = utils._get_as_snowflake(data, 'channel_id')
 
+        self._cover_image: Optional[str] = data.get('image')
+
         metadata = data.get('entity_metadata')
         self._parse_metadata(metadata)
 
@@ -190,12 +197,12 @@ class GuildEvent(Hashable):
 
     @property
     def location(self) -> Union[VoiceChannel, StageChannel, str]:
-        """The external location or channel of this event"""
+        """Union[:class:`VoiceChannel`, :class:`StageChannel`, :class:`str`]: The external location or channel of this event"""
         return self.external_location or self.channel
 
     @property
     def channel(self) -> Optional[Union[VoiceChannel, StageChannel, Object]]:
-        """The channel where this event is scheduled to take place.
+        """Optional[Union[:class:`VoiceChannel`, :class:`StageChannel`, :class:`Object`]]: The channel where this event is scheduled to take place.
         Can be ``None`` if location type is external.
         """
         if self.channel_id:
@@ -208,8 +215,8 @@ class GuildEvent(Hashable):
         return utils.snowflake_time(self.id)
 
     @property
-    def duration(self):
-        """How long the event will last.
+    def duration(self) -> Optional[datetime.timedelta]:
+        """Optional[:class:`datetime.timedelta`]: How long the event will last.
         Can be ``None`` if missing :attr:`GuildEvent.end_time`
         """
         if not self.start_time or not self.end_time:
@@ -217,9 +224,16 @@ class GuildEvent(Hashable):
         return self.end_time - self.start_time
 
     @property
-    def url(self):
-        """The url for this event."""
+    def url(self) -> str:
+        """:class:`str`: The url for this event."""
         return f'https://discord.com/events/{self.guild.id}/{self.id}'
+
+    @property
+    def cover_image(self) -> Optional[Asset]:
+        """Optional[Asset}: The cover image for this event."""
+        if self._cover_image is None:
+            return None
+        return Asset._from_guild_event_image(self._state, self.id, self._cover_image)
 
     async def edit(
         self,
@@ -229,8 +243,9 @@ class GuildEvent(Hashable):
         status: GuildEventStatus = MISSING,
         location: Union[StageChannel, VoiceChannel, str] = MISSING,
         start_time: datetime.datetime = MISSING,
-        end_time: datetime.datetime = MISSING,
+        end_time: Optional[datetime.datetime] = MISSING,
         privacy_level: GuildEventPrivacyLevel = MISSING,
+        cover_image: Optional[bytes] = MISSING,
         reason: Optional[str] = None
     ):
         """|coro|
@@ -255,10 +270,14 @@ class GuildEvent(Hashable):
             The status of the event.
         start_time: :class:`datetime.datetime`
             The new starting time for the event.
-        end_time: :class:`datetime.datetime`
+        end_time: Optional[:class:`datetime.datetime`]
             The new ending time of the event.
+
+            Pass ``None`` to remove end time.
         privacy_level: :class:`GuildEventPrivacyLevel`
             The privacy level of the event.
+        cover_image: Optional[:class:`bytes`]
+            The new image of the event. Pass None to remove.
         reason: Optional[:class:`str`]
             The reason to show in the audit log.
 
@@ -311,12 +330,14 @@ class GuildEvent(Hashable):
                     raise TypeError('location must be a VoiceChannel, StageChannel, or str.')
 
         if start_time is not MISSING:
-            payload["scheduled_start_time"] = start_time.isoformat()
-
+            payload['scheduled_start_time'] = start_time.isoformat()
         if end_time is not MISSING:
-            payload["scheduled_end_time"] = end_time.isoformat() if end_time is not None else end_time
+            payload['scheduled_end_time'] = end_time.isoformat() if end_time is not None else end_time
         if isinstance(location, str) and not self.end_time and not end_time:
             raise InvalidArgument('end_time must be provided for events with external location type')
+
+        if cover_image is not MISSING:
+            payload['image'] = utils._bytes_to_base64_data(cover_image) if cover_image is not None else cover_image
 
         if payload:
             data = await self._state.http.edit_guild_event(self.guild.id, self.id, reason=reason, **payload)

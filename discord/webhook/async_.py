@@ -359,7 +359,7 @@ class AsyncWebhookAdapter:
 
         form = None
         if files is not None:
-            form = utils.resolve_multipart(payload, files, msg_payload=payload['data'])
+            form = utils.resolve_multipart(payload, files, msg_payload=payload.get('data'))
             payload = None
 
         route = Route(

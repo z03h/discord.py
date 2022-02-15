@@ -837,8 +837,6 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
         before = self.before.id if self.before else None
         data: List[GuildEventUserPayload] = await self.get_users(guild_id=self.event.guild.id, event_id=self.event.id, limit=retrieve, with_member=self.with_member, before=before)
         if data:
-            if self.limit is not None:
-                self.limit -= self.retrieve
             self.before = Object(int(data[0]['user']['id']))
             data.reverse()
 
@@ -848,8 +846,6 @@ class GuildEventUserIterator(_AsyncIterator[Union["User", "Member"]]):
         after = self.after.id if self.after else None
         data: List[GuildEventUserPayload] = await self.get_users(guild_id=self.event.guild.id, event_id=self.event.id, limit=retrieve, with_member=self.with_member, after=after)
         if data:
-            if self.limit is not None:
-                self.limit -= self.retrieve
             self.after = Object(int(data[-1]['user']['id']))
 
         return data

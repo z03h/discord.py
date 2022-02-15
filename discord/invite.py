@@ -376,13 +376,8 @@ class Invite(Hashable):
 
         event = data.get('guild_scheduled_event')
         if event:
-            try:
-                event = self.guild.get_event(int(event['id']))
-            except Exception:
-                from .guild_events import GuildEvent
-                event = GuildEvent(guild=self.guild, state=state, data=event)
-                guild._add_event(event)
-
+            from .guild_events import GuildEvent
+            event = GuildEvent(guild=self.guild, state=state, data=event)
             self._event: Optional[GuildEvent] = event
             self.event_id = self.event.id
         else:
