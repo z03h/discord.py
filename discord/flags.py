@@ -496,6 +496,7 @@ class Intents(BaseFlags):
         self = cls.all()
         self.presences = False
         self.members = False
+        self.message_content = False
         return self
 
     @flag_value
@@ -873,6 +874,34 @@ class Intents(BaseFlags):
         This does not correspond to any attributes or classes in the library in terms of cache.
         """
         return 1 << 14
+
+    @flag_value
+    def message_content(self):
+        """:class:`bool`: Whether you receive message content.
+
+        This corresponds to the following events:
+
+        - :func:`on_message`
+
+        .. note::
+
+            Does not affect messages the bot sends, direct messages, messages
+            the bot is mentioned in.
+
+        This also corresponds to the following attributes and classes in terms of cache:
+
+        - :attr:`Message.content`
+        - :attr:`Message.embeds`
+        - :attr:`Message.attachments`
+        - :attr:`Message.components`
+
+        .. note::
+
+            Currently, this requires opting in explicitly via the developer portal as well.
+            Bots in over 100 guilds will need to apply to Discord for verification.
+
+        """
+        return 1 << 15
 
     @flag_value
     def guild_events(self):
