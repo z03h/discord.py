@@ -754,6 +754,9 @@ class Message(Hashable):
                     if ref.channel_id == channel.id:
                         chan = channel
                     else:
+                        # guild_id may be missing
+                        if ref.guild_id is not None:
+                            resolved['guild_id'] = ref.guild_id
                         chan, _ = state._get_guild_channel(resolved)
 
                     # the channel will be the correct type here
