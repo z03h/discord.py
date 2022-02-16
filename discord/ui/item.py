@@ -24,7 +24,8 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Coroutine, Dict, Generic, Optional, TYPE_CHECKING, Tuple, Type, TypeVar
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Coroutine, Dict, Generic, NamedTuple, Optional, TYPE_CHECKING, Tuple, Type, TypeVar
 
 from ..interactions import Interaction
 
@@ -34,21 +35,39 @@ __all__ = (
 
 if TYPE_CHECKING:
     from ..enums import ComponentType
+    from .abc import ItemContainer
+    from .modal import Modal
     from .view import View
     from ..components import Component
 
+    C = TypeVar('C', bound=ItemContainer, covariant=True)
+    M = TypeVar('M', bound=Modal, covariant=True)
+    V = TypeVar('V', bound=View, covariant=True)
+
+else:
+    C = TypeVar('C', bound='ItemContainer', covariant=True)
+    M = TypeVar('M', bound='Modal', covariant=True)
+    V = TypeVar('V', bound='View', covariant=True)
+
 I = TypeVar('I', bound='Item')
-V = TypeVar('V', bound='View', covariant=True)
+
 ItemCallbackType = Callable[[Any, I, Interaction], Coroutine[Any, Any, Any]]
 
+__all__ = (
+    'Item',
+    'ViewItem',
+    'ModalItem',
+)
 
-class Item(Generic[V]):
+
+class Item(ABC, Generic[C]):
     """Represents the base UI item that all UI components inherit from.
 
     The current UI items supported are:
 
     - :class:`discord.ui.Button`
     - :class:`discord.ui.Select`
+    - :class:`discord.ui.TextInput`
 
     .. versionadded:: 2.0
     """
@@ -56,7 +75,6 @@ class Item(Generic[V]):
     __item_repr_attributes__: Tuple[str, ...] = ('row',)
 
     def __init__(self):
-        self._view: Optional[V] = None
         self._row: Optional[int] = None
         self._rendered_row: Optional[int] = None
         # This works mostly well but there is a gotcha with
@@ -67,6 +85,11 @@ class Item(Generic[V]):
         # only called upon edit and we're mainly interested during initial creation time.
         self._provided_custom_id: bool = False
 
+    @abstractmethod
+    def _attach_container(self, container: C) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     def to_component_dict(self) -> Dict[str, Any]:
         raise NotImplementedError
 
@@ -81,6 +104,7 @@ class Item(Generic[V]):
         return cls()
 
     @property
+    @abstractmethod
     def type(self) -> ComponentType:
         raise NotImplementedError
 
@@ -111,6 +135,24 @@ class Item(Generic[V]):
     def width(self) -> int:
         return 1
 
+
+class ViewItem(Item[V], ABC):
+    """Represents the base UI item that all view-specific UI components inherit from.
+
+    Currently the following inherit from this:
+
+    - :class:`discord.ui.Button`
+    - :class:`discord.ui.Select`
+    """
+
+    def __init__(self):
+        self._view: Optional[V] = None
+
+        super().__init__()
+
+    def _attach_container(self, view: V) -> None:
+        self._view = view
+
     @property
     def view(self) -> Optional[V]:
         """Optional[:class:`View`]: The underlying view for this item."""
@@ -129,3 +171,29 @@ class Item(Generic[V]):
             The interaction that triggered this UI item.
         """
         pass
+
+
+class ModalItem(Item[M], ABC):
+    """Represents the base UI item that all modal-specific UI components inherit from.
+
+    Currently the following inherit from this:
+
+    - :class:`discord.ui.TextInput`
+    """
+
+    def __init__(self):
+        self._modal: Optional[M] = None
+
+        super().__init__()
+
+    def _attach_container(self, modal: M) -> None:
+        self._modal = modal
+
+    @abstractmethod
+    def _inject_data(self, data: Dict[str, Any]) -> None:
+        raise NotImplementedError
+
+    @property
+    def modal(self) -> Optional[M]:
+        """Optional[:class:`Modal`]: The underlying modal for this item."""
+        return self._modal

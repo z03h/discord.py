@@ -38,6 +38,8 @@ from typing import Dict, Optional, TYPE_CHECKING, Union, Callable, Any, List, Ty
 from . import utils
 from .guild import Guild
 from .activity import BaseActivity
+from .ui import Modal
+from .ui.modal import ModalStore
 from .user import User, ClientUser
 from .emoji import Emoji
 from .mentions import AllowedMentions
@@ -246,7 +248,7 @@ class ConnectionState:
 
         self.clear()
 
-    def clear(self, *, views: bool = True, application_commands: bool = True) -> None:
+    def clear(self, *, views: bool = True, application_commands: bool = True, modals: bool = True) -> None:
         self.user: Optional[ClientUser] = None
         # Originally, this code used WeakValueDictionary to maintain references to the
         # global user mapping.
@@ -269,6 +271,8 @@ class ConnectionState:
         if application_commands:
             from .application_commands import ApplicationCommandStore
             self._application_commands_store: ApplicationCommandStore = ApplicationCommandStore(self)
+        if modals:
+            self._modal_store: ModalStore = ModalStore(self)
 
         self._voice_clients: Dict[int, VoiceProtocol] = {}
 
@@ -570,6 +574,9 @@ class ConnectionState:
 
         await self.update_global_application_commands()
 
+    def store_modal(self, modal: Modal) -> None:
+        self._modal_store.add_modal(modal)
+
     async def _delay_ready(self) -> None:
         try:
             states = []
@@ -782,6 +789,9 @@ class ConnectionState:
 
         elif data['type'] == 4:  # application command auto-complete
             self._application_commands_store.dispatch_autocomplete(data['data'], interaction)
+
+        elif data['type'] == 5:
+            self._modal_store.dispatch(interaction)
 
         self.dispatch('interaction', interaction)
 

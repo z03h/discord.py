@@ -29,7 +29,7 @@ import inspect
 import os
 
 
-from .item import Item, ItemCallbackType
+from .item import ItemCallbackType, ViewItem
 from ..enums import ButtonStyle, ComponentType
 from ..partial_emoji import PartialEmoji, _EmojiTag
 from ..components import Button as ButtonComponent
@@ -47,7 +47,7 @@ B = TypeVar('B', bound='Button')
 V = TypeVar('V', bound='View', covariant=True)
 
 
-class Button(Item[V]):
+class Button(ViewItem[V]):
     """Represents a UI button.
 
     .. versionadded:: 2.0
@@ -123,7 +123,7 @@ class Button(Item[V]):
             style=style,
             emoji=emoji,
         )
-        self.row = row
+        self._row = row
 
     @property
     def style(self) -> ButtonStyle:
