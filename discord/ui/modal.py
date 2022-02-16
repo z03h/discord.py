@@ -55,25 +55,23 @@ class Modal(ItemContainer[ModalItem], max_width=1, max_children=5):
 
     Usage ::
 
-        .. code:: python3
+        import discord
+        from discord.ui import Modal, text_input
 
-            import discord
-            from discord.ui import Modal, text_input
+        class MyModal(Modal):
+            name = text_input(label='Name', placeholder='Enter your name here...', min_length=2, max_length=32, required=True)
 
-            class MyModal(Modal):
-                name = text_input(label='Name', placeholder='Enter your name here...', min_length=2, max_length=32, required=True)
+            def __init__(self):
+                super().__init__(title='My Modal', timeout=240)
 
-                def __init__(self):
-                    super().__init__(title='My Modal', timeout=240)
+            async def callback(self, interaction: discord.Interaction):
+                await interaction.response.send_message(f'Hello, {self.name.value}!')
 
-                async def callback(self, interaction: discord.Interaction):
-                    await interaction.response.send_message(f'Hello, {self.name.value}!')
+        class Hello(discord.application_commands.ApplicationCommand):
+            \"""Sends a modal\"""
 
-            class Hello(discord.application_commands.ApplicationCommand):
-                \"""Sends a modal\"""
-
-                async def callback(self, interaction: discord.Interaction):
-                    await interaction.response.send_modal(MyModal())
+            async def callback(self, interaction: discord.Interaction):
+                await interaction.response.send_modal(MyModal())
 
     .. versionadded:: 2.0
 

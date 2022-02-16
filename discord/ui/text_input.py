@@ -264,10 +264,8 @@ def text_input(**kwargs) -> TextInput:
 
     Example ::
 
-        .. code:: python3
-
-            class MyModal(Modal):
-                my_input = text_input(label='Here I am!')
+        class MyModal(Modal):
+            my_input = text_input(label='Here I am!')
 
     Parameters
     ----------
