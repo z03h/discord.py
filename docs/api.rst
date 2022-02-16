@@ -1500,6 +1500,23 @@ of :class:`enum.Enum`.
 
         An alias for :attr:`link`.
 
+.. class:: TextInputStyle
+
+    Represents the style of the text input component.
+
+    .. versionadded:: 2.0
+
+    .. attribute:: short
+
+        This is the default style. A single-line text input.
+    .. attribute:: paragraph
+
+        A multi-line text input which is displayed larger than the short style.
+    .. attribute:: long
+
+        An alias for :attr:`paragraph`.
+
+
 .. class:: VoiceRegion
 
     Specifies the region a voice server belongs to.
@@ -4243,6 +4260,14 @@ Bot UI Kit
 
 The library has helpers to help create component-based UIs.
 
+ItemContainer
+~~~~~~~~~~~~~
+
+.. attributetable:: discord.ui.ItemContainer
+
+.. autoclass:: discord.ui.ItemContainer
+    :members:
+
 View
 ~~~~~~~
 
@@ -4250,6 +4275,16 @@ View
 
 .. autoclass:: discord.ui.View
     :members:
+    :inherited-members:
+
+Modal
+~~~~~
+
+.. attributetable:: discord.ui.Modal
+
+.. autoclass:: discord.ui.Modal
+    :members:
+    :inherited-members:
 
 Item
 ~~~~~~~
@@ -4258,6 +4293,24 @@ Item
 
 .. autoclass:: discord.ui.Item
     :members:
+
+ViewItem
+~~~~~~~~
+
+.. attributetable:: discord.ui.ViewItem
+
+.. autoclass:: discord.ui.ViewItem
+    :members:
+    :inherited-members:
+
+ModalItem
+~~~~~~~~~
+
+.. attributetable:: discord.ui.ModalItem
+
+.. autoclass:: discord.ui.ModalItem
+    :members:
+    :inherited-members:
 
 Button
 ~~~~~~~
@@ -4280,6 +4333,17 @@ Select
     :inherited-members:
 
 .. autofunction:: discord.ui.select
+
+TextInput
+~~~~~~~~
+
+.. attributetable:: discord.ui.TextInput
+
+.. autoclass:: discord.ui.TextInput
+    :members:
+    :inherited-members:
+
+.. autofunction:: discord.ui.text_input
 
 
 Exceptions

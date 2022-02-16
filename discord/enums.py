@@ -51,6 +51,7 @@ __all__ = (
     'VideoQualityMode',
     'ComponentType',
     'ButtonStyle',
+    'TextInputStyle',
     'StagePrivacyLevel',
     'ApplicationCommandType',
     'ApplicationCommandOptionType',

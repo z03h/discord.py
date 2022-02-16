@@ -66,14 +66,14 @@ class Modal(ItemContainer[ModalItem], max_width=1, max_children=5):
                 def __init__(self):
                     super().__init__(title='My Modal', timeout=240)
 
-                async def callback(self. interaction: discord.Interaction):
+                async def callback(self, interaction: discord.Interaction):
                     await interaction.response.send_message(f'Hello, {self.name.value}!')
 
             class Hello(discord.application_commands.ApplicationCommand):
                 \"""Sends a modal\"""
 
                 async def callback(self, interaction: discord.Interaction):
-                    await interaction.send_modal(MyModal())
+                    await interaction.response.send_modal(MyModal())
 
     .. versionadded:: 2.0
 
