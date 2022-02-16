@@ -210,6 +210,8 @@ class ModalStore:
 
     @staticmethod
     async def invoke(modal: Modal, interaction: Interaction) -> None:
+        if not await modal.interaction_check(interaction):
+            return
         try:
             await modal.callback(interaction)
         except Exception as exc:
