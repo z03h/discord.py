@@ -79,6 +79,7 @@ if TYPE_CHECKING:
     from .state import ConnectionState
     from .mentions import AllowedMentions
     from .embeds import Embed
+    from .ui.modal import Modal
     from .ui.view import View
     from .channel import VoiceChannel, StageChannel, TextChannel, CategoryChannel, StoreChannel, PartialMessageable
     from .threads import Thread
@@ -1238,6 +1239,43 @@ class InteractionResponse:
             data={'choices': payload},
         )
 
+        self._responded = True
+
+    async def send_modal(self, modal: Modal) -> None:
+        """|coro|
+
+        Responds to the interaction by displaying a modal.
+
+        Parameters
+        ----------
+        modal: :class:`discord.ui.Modal`
+            The modal to display to the user.
+
+        Raises
+        ------
+        HTTPException
+            Sending the modal failed.
+        InteractionResponded
+            This interaction has already been responded to before.
+        """
+        parent = self._parent
+
+        if self._responded:
+            raise InteractionResponded(parent)
+
+        if parent.type in (InteractionType.ping, InteractionType.modal_submit):
+            raise TypeError('cannot use this type of response on this type of interaction.')
+
+        adapter = async_context.get()
+        await adapter.create_interaction_response(
+            parent.id,
+            parent.token,
+            session=parent._session,
+            type=InteractionResponseType.modal.value,
+            data=modal.to_dict(),
+        )
+
+        parent._state.store_modal(modal)
         self._responded = True
 
 

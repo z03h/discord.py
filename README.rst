@@ -13,32 +13,43 @@ discord.py
 
 A modern, easy to use, feature-rich, and async ready API wrapper for Discord written in Python.
 
-Welcome to my spoon of discord.py
----------------------------------
+Welcome to my fork of discord.py
+--------------------------------
 
 It was originally made to implement Danny's
 `slash command DSL <https://gist.github.com/Rapptz/2a7a299aa075427357e9b8a970747c2c>`_ (The class based version),
-and it does it pretty well, although I still need to decide what happens with naming conflicts.
+and it does it pretty well.
 
 There have been many changes since this DSL was created however, for example slash commands turning
 into a category of "application commands". These "application commands" also contain "context menus",
-specifically referred to as "message commands" and "user commands". This spoon™ does, in fact, support them.
+specifically referred to as "message commands" and "user commands". This fork does, in fact, support them.
 
 As a result of this, naming schemes that go along "slash command" have been renamed to their counterparts
 that go along with "application_command". This unfortunately does make things a bit verbose, however
 shortening the names would leave name conflicts and confusion.
 
-Everything that this spoon™ adds/supports
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Additionally, accessing information about the command itself requires accessing an attribute with a
+relatively verbose name (e.g. ``__application_command_name__``)
+
+What's been added?
+~~~~~~~~~~~~~~~~~~
 - Application commands
 
   - Slash commands
   - Context menus (Message commands & user commands)
   - ``channel_types`` option field
   - Autocomplete options
+  - Attachment option type
+
+- UI
+
+  - Modals @ ``discord.ui.Modal``
+  - ``ItemContainer`` ABC
 
 - Role icons
-- Welcome screens (in which is *not* NC's PR)
+- Welcome screens
+- Guild scheduled events
+- Member chat timeout (``communication_disabled_until``)
 
 Key Features
 -------------

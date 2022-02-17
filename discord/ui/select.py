@@ -27,7 +27,7 @@ from typing import List, Optional, TYPE_CHECKING, Tuple, TypeVar, Type, Callable
 import inspect
 import os
 
-from .item import Item, ItemCallbackType
+from .item import ItemCallbackType, ViewItem
 from ..enums import ComponentType
 from ..partial_emoji import PartialEmoji
 from ..emoji import Emoji
@@ -50,11 +50,14 @@ if TYPE_CHECKING:
         ComponentInteractionData,
     )
 
+    V = TypeVar('V', bound=View, covariant=True)
+else:
+    V = TypeVar('V', bound='View', covariant=True)
+
 S = TypeVar('S', bound='Select')
-V = TypeVar('V', bound='View', covariant=True)
 
 
-class Select(Item[V]):
+class Select(ViewItem[V]):
     """Represents a UI select menu.
 
     This is usually represented as a drop down menu.
@@ -121,7 +124,7 @@ class Select(Item[V]):
             options=options,
             disabled=disabled,
         )
-        self.row = row
+        self._row = row
 
     @property
     def custom_id(self) -> str:

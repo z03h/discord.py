@@ -25,7 +25,7 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 from typing import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING, Tuple, Type, TypeVar, Union
-from .enums import try_enum, ComponentType, ButtonStyle
+from .enums import TextInputStyle, try_enum, ComponentType, ButtonStyle
 from .utils import get_slots, MISSING
 from .partial_emoji import PartialEmoji, _EmojiTag
 
@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         SelectMenu as SelectMenuPayload,
         SelectOption as SelectOptionPayload,
         ActionRow as ActionRowPayload,
+        TextInput as TextInputPayload,
     )
     from .emoji import Emoji
 
@@ -266,6 +267,65 @@ class SelectMenu(Component):
         return payload
 
 
+class TextInput(Component):
+    """Represents a text input component inside a modal.
+
+    This inherits from :class:`.Component`.
+
+    .. note::
+
+        The user-constructable item type is :class:`discord.ui.TextInput` not this one.
+
+    .. versionadded:: 2.0
+    """
+
+    __slots__: Tuple[str, ...] = (
+        'custom_id',
+        'style',
+        'label',
+        'min_length',
+        'max_length',
+        'required',
+        'value',
+        'placeholder',
+    )
+
+    def __init__(self, data: TextInputPayload):
+        self.type = ComponentType.text_input
+        self.custom_id: str = data['custom_id']
+        self.style: TextInputStyle = try_enum(TextInputStyle, data['style'])
+        self.label: str = data['label']
+        self.required: bool = data.get('required', False)
+
+        self.min_length: Optional[int] = data.get('min_length')
+        self.max_length: Optional[int] = data.get('max_length')
+        self.value: Optional[str] = data.get('value')
+        self.placeholder: Optional[str] = data.get('placeholder')
+
+    def to_dict(self) -> TextInputPayload:
+        payload: TextInputPayload = {
+            'type': self.type.value,  # type: ignore
+            'custom_id': self.custom_id,
+            'style': self.style.value,  # type: ignore
+            'label': self.label,
+            'required': self.required,
+        }
+
+        if self.min_length is not None:
+            payload['min_length'] = self.min_length
+
+        if self.max_length is not None:
+            payload['max_length'] = self.max_length
+
+        if self.value is not None:
+            payload['value'] = self.value
+
+        if self.placeholder is not None:
+            payload['placeholder'] = self.placeholder
+
+        return payload
+
+
 class SelectOption:
     """Represents a select menu's option.
 
@@ -378,6 +438,8 @@ def _component_factory(data: ComponentPayload) -> Component:
         return Button(data)  # type: ignore
     elif component_type == 3:
         return SelectMenu(data)  # type: ignore
+    elif component_type == 4:
+        return TextInput(data)  # type: ignore
     else:
         as_enum = try_enum(ComponentType, component_type)
         return Component._raw_construct(type=as_enum)
