@@ -72,12 +72,6 @@ class AppInfo:
         grant flow to join.
     rpc_origins: Optional[List[:class:`str`]]
         A list of RPC origin URLs, if RPC is enabled.
-    summary: :class:`str`
-        If this application is a game sold on Discord,
-        this field will be the summary field for the store page of its primary SKU.
-
-        .. versionadded:: 1.3
-
     verify_key: :class:`str`
         The hex encoded key for verification in interactions and the
         GameSDK's `GetTicket <https://discord.com/developers/docs/game-sdk/applications#getticket>`_.
@@ -124,7 +118,6 @@ class AppInfo:
         'bot_require_code_grant',
         'owner',
         '_icon',
-        'summary',
         'verify_key',
         'team',
         'guild_id',
@@ -151,7 +144,6 @@ class AppInfo:
         team: Optional[TeamPayload] = data.get('team')
         self.team: Optional[Team] = Team(state, team) if team else None
 
-        self.summary: str = data['summary']
         self.verify_key: str = data['verify_key']
 
         self.guild_id: Optional[int] = utils._get_as_snowflake(data, 'guild_id')
