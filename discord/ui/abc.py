@@ -260,8 +260,8 @@ class ItemContainer(ABC, Generic[I]):
         Returns
         --------
         :class:`bool`
-            If ``True``, then the view timed out. If ``False`` then
-            the view finished normally.
+            If ``True``, then the container timed out. If ``False`` then
+            the container finished normally.
         """
         return await self._stopped
 

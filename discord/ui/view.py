@@ -61,7 +61,7 @@ __all__ = (
 )
 
 
-class View(ItemContainer[ViewItem]):
+class View(ItemContainer[ViewItem], max_width=5, max_children=25):
     """Represents a UI view.
 
     This object must be inherited to create a UI within Discord.
