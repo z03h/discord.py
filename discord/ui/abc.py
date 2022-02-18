@@ -140,29 +140,29 @@ class ItemContainer(ABC, Generic[I]):
 
         self.__weights = ItemWeights(self.children, max_width=self.__discord_ui_max_width__)
 
-        self.__cancel_callback: Optional[Callable[[ItemContainer], None]] = None
-        self.__timeout_expiry: Optional[float] = None
-        self.__timeout_task: Optional[asyncio.Task[None]] = None
+        self._cancel_callback: Optional[Callable[[ItemContainer], None]] = None
+        self._timeout_expiry: Optional[float] = None
+        self._timeout_task: Optional[asyncio.Task[None]] = None
 
         loop = asyncio.get_event_loop()
-        self.__stopped: asyncio.Future[bool] = loop.create_future()
+        self._stopped: asyncio.Future[bool] = loop.create_future()
 
-    async def __timeout_task_impl(self) -> None:
+    async def _timeout_task_impl(self) -> None:
         while True:
             # Guard just in case someone changes the value of the timeout at runtime
             if self.timeout is None:
                 return
 
-            if self.__timeout_expiry is None:
+            if self._timeout_expiry is None:
                 return self._dispatch_timeout()
 
             # Check if we've elapsed our currently set timeout
             now = time.monotonic()
-            if now >= self.__timeout_expiry:
+            if now >= self._timeout_expiry:
                 return self._dispatch_timeout()
 
             # Wait N seconds to see if timeout data has been refreshed
-            await asyncio.sleep(self.__timeout_expiry - now)
+            await asyncio.sleep(self._timeout_expiry - now)
 
     @property
     def _expires_at(self) -> Optional[float]:
@@ -226,7 +226,7 @@ class ItemContainer(ABC, Generic[I]):
     async def on_timeout(self) -> None:
         """|coro|
 
-        A callback that is called when a view's timeout elapses without being explicitly stopped.
+        A callback that is called when a containers's timeout elapses without being explicitly stopped.
         """
         pass
 
@@ -235,26 +235,26 @@ class ItemContainer(ABC, Generic[I]):
 
         This operation cannot be undone.
         """
-        if not self.__stopped.done():
-            self.__stopped.set_result(False)
+        if not self._stopped.done():
+            self._stopped.set_result(False)
 
-        self.__timeout_expiry = None
-        if self.__timeout_task is not None:
-            self.__timeout_task.cancel()
-            self.__timeout_task = None
+        self._timeout_expiry = None
+        if self._timeout_task is not None:
+            self._timeout_task.cancel()
+            self._timeout_task = None
 
-        if self.__cancel_callback:
-            self.__cancel_callback(self)
-            self.__cancel_callback = None
+        if self._cancel_callback:
+            self._cancel_callback(self)
+            self._cancel_callback = None
 
     def is_finished(self) -> bool:
-        """:class:`bool`: Whether the view has finished interacting."""
-        return self.__stopped.done()
+        """:class:`bool`: Whether the container has finished interacting."""
+        return self._stopped.done()
 
     async def wait(self) -> bool:
-        """Waits until the view has finished interacting.
+        """Waits until the container has finished interacting.
 
-        A view is considered finished when :meth:`stop` is called
+        A container is considered finished when :meth:`stop` is called
         or it times out.
 
         Returns
@@ -263,15 +263,15 @@ class ItemContainer(ABC, Generic[I]):
             If ``True``, then the view timed out. If ``False`` then
             the view finished normally.
         """
-        return await self.__stopped
+        return await self._stopped
 
     def add_item(self, item: I) -> None:
-        """Adds an item to the view.
+        """Adds an item to the container.
 
         Parameters
         -----------
         item: :class:`Item`
-            The item to add to the view.
+            The item to add to the container.
 
         Raises
         --------
@@ -294,12 +294,12 @@ class ItemContainer(ABC, Generic[I]):
         self.children.append(item)
 
     def remove_item(self, item: I) -> None:
-        """Removes an item from the view.
+        """Removes an item from the container.
 
         Parameters
         -----------
         item: :class:`Item`
-            The item to remove from the view.
+            The item to remove from the container.
         """
 
         try:
@@ -310,6 +310,6 @@ class ItemContainer(ABC, Generic[I]):
             self.__weights.remove_item(item)
 
     def clear_items(self) -> None:
-        """Removes all items from the view."""
+        """Removes all items from the container."""
         self.children.clear()
         self.__weights.clear()

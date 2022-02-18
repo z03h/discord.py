@@ -626,7 +626,7 @@ def _get_application_command_options(
 
         result[name] = value
 
-    if len(option_kwargs):
+    if option_kwargs:
         for attr, annotation in annotations.items():
             if attr in result:
                 continue
@@ -763,13 +763,13 @@ class ApplicationCommandMeta(type):
             'options': [],
         }
 
-        if len(children := cls.__application_command_children__):
+        if children := cls.__application_command_children__:
             option_type = ApplicationCommandOptionType.subcommand_group
             payload['options'].extend(command.to_option_dict() for command in children.values())
         else:
             option_type = ApplicationCommandOptionType.subcommand
 
-        if len(options := cls.__application_command_options__):
+        if options := cls.__application_command_options__:
             payload['options'].extend(option.to_dict() for option in options.values())
 
         if not payload['options']:
@@ -789,10 +789,10 @@ class ApplicationCommandMeta(type):
         if cls.__application_command_type__ is ApplicationCommandType.chat_input:
             payload['description'] = cls.__application_command_description__
 
-        if len(children := cls.__application_command_children__):
+        if children := cls.__application_command_children__:
             payload['options'].extend(command.to_option_dict() for command in children.values())
 
-        if len(options := cls.__application_command_options__):
+        if options := cls.__application_command_options__:
             payload['options'].extend(option.to_dict() for option in options.values())
 
         if not payload['options']:
@@ -803,10 +803,10 @@ class ApplicationCommandMeta(type):
     def _match_key(cls) -> Tuple[Any, ...]:
         options = []
 
-        if len(children := cls.__application_command_children__):
+        if children := cls.__application_command_children__:
             options.extend(command._option_match_key() for command in children.values())
 
-        if len(options_ := cls.__application_command_options__):
+        if options_ := cls.__application_command_options__:
             options.extend(option._match_key() for option in options_.values())
 
         return (
@@ -823,7 +823,7 @@ class ApplicationCommandMeta(type):
         if has_children := len(children := cls.__application_command_children__):
             options.extend(command._option_match_key() for command in children.values())
 
-        if len(options_ := cls.__application_command_options__):
+        if options_ := cls.__application_command_options__:
             options.extend(option._match_key() for option in options_.values())
 
         return (

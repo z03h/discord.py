@@ -896,7 +896,7 @@ class InteractionResponse:
         parent = self._parent
         if parent.type is InteractionType.component:
             defer_type = InteractionResponseType.deferred_message_update.value
-        elif parent.type is InteractionType.application_command:
+        elif parent.type in (InteractionType.application_command, InteractionType.modal_submit):
             defer_type = InteractionResponseType.deferred_channel_message.value
             if ephemeral:
                 data = {'flags': 64}
