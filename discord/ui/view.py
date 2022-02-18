@@ -109,7 +109,7 @@ class View(ItemContainer[ViewItem], max_width=5, max_children=25):
             item.callback = partial(func, self, item)
             item._view = self
             setattr(self, func.__name__, item)
-            self.children.append(item)
+            self.add_item(item)
 
         self.id: str = os.urandom(16).hex()
 
