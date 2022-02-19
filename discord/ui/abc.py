@@ -46,11 +46,11 @@ from typing import (
 
 from .item import Item, ModalItem, ViewItem
 from .weights import ItemWeights
+from ..components import ActionRow as ActionRowComponent
 
 if TYPE_CHECKING:
     from ..components import (
         Component,
-        ActionRow as ActionRowComponent,
         Button as ButtonComponent,
         SelectMenu as SelectComponent,
         TextInput as TextInputComponent,
