@@ -124,7 +124,7 @@ def _transform_icon(entry: AuditLogEntry, data: Optional[str]) -> Optional[Asset
 
     # filter for role icon vs guild icon
     if entry.action.name.startswith('role_'):
-        return Asset._from_role_icon(entry._state, entry.target.id, data)
+        return Asset._from_icon(entry._state, entry.target.id, data, 'role')
     else:
         return Asset._from_guild_icon(entry._state, entry.guild.id, data)
 
