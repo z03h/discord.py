@@ -867,7 +867,7 @@ class InteractionResponse:
         """
         return self._responded
 
-    async def defer(self, *, ephemeral: bool = False, loading: bool = False) -> None:
+    async def defer(self, *, loading: bool = False, ephemeral: bool = False) -> None:
         """|coro|
 
         Defers the interaction response.
@@ -877,17 +877,18 @@ class InteractionResponse:
 
         Parameters
         -----------
-        ephemeral: :class:`bool`
-            Indicates whether the deferred message will eventually be ephemeral.
-            This only applies for interactions of type :attr:`InteractionType.application_command`
-            or if ``loading`` is set to ``True``.
-
         loading: :class:`bool`
             Whether the user should see a loading state.
 
             .. note::
 
-                You must use the ephemeral kwarg to send ephemeral followups.
+                You must use the ``ephemeral`` kwarg to send ephemeral followups
+                when this is set to ``True``.
+
+        ephemeral: :class:`bool`
+            Indicates whether the deferred message will eventually be ephemeral.
+            This only applies if ``loading`` is set to ``True`` or for interactions
+            of type :attr:`InteractionType.application_command`.
 
         Raises
         -------

@@ -608,8 +608,9 @@ class Member(discord.abc.Messageable, _UserTag):
 
     @property
     def role_icon(self) -> Optional[Asset]:
-        """Optional[:class:`Asset`]: Returns the role icon that is displayed next to this member's name,
-        and ``None`` if no icon is displayed.
+        """Optional[Union[:class:`Asset`, :class:`str`]]: Returns the role icon or
+        unicode emoji that is displayed next to this member's name, or ``None``
+        if no icon is displayed.
 
         .. versionadded:: 2.0
         """
@@ -617,8 +618,9 @@ class Member(discord.abc.Messageable, _UserTag):
             return None
 
         for role in reversed(self.roles):
-            if icon := role.icon:
-                return icon
+            display_icon = role.icon or role.unicode_emoji
+            if display_icon:
+                return display_icon
 
         return None  # Unnecessary but more readable
 

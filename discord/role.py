@@ -310,7 +310,7 @@ class Role(Hashable):
     @property
     def icon(self) -> Optional[Asset]:
         """Optional[:class:`Asset`]: The asset representing the icon that is
-        displayed next to members that have this role or``None`` if this role
+        displayed next to members that have this role or ``None`` if this role
         does not have one.
 
         .. versionadded:: 2.0
