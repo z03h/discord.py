@@ -1049,7 +1049,8 @@ class Message(Hashable):
         return self.type not in (
             MessageType.default,
             MessageType.reply,
-            MessageType.application_command,
+            MessageType.chat_input_command,
+            MessageType.context_menu_command,
             MessageType.thread_starter_message,
         )
 
