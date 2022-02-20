@@ -60,6 +60,7 @@ if TYPE_CHECKING:
     from .stage_instance import StageInstance
     from .sticker import GuildSticker
     from .threads import Thread
+    from .guild_events import GuildEvent
 
 
 def _transform_permissions(entry: AuditLogEntry, data: str) -> Permissions:
@@ -84,6 +85,7 @@ def _transform_member_id(entry: AuditLogEntry, data: Optional[Snowflake]) -> Uni
     if data is None:
         return None
     return entry._get_member(int(data))
+
 
 def _transform_guild_id(entry: AuditLogEntry, data: Optional[Snowflake]) -> Optional[Guild]:
     if data is None:
@@ -119,7 +121,12 @@ def _transform_overwrites(
 def _transform_icon(entry: AuditLogEntry, data: Optional[str]) -> Optional[Asset]:
     if data is None:
         return None
-    return Asset._from_guild_icon(entry._state, entry.guild.id, data)
+
+    # filter for role icon vs guild icon
+    if entry.action.name.startswith('role_'):
+        return Asset._from_icon(entry._state, entry.target.id, data, 'role')
+    else:
+        return Asset._from_guild_icon(entry._state, entry.guild.id, data)
 
 
 def _transform_avatar(entry: AuditLogEntry, data: Optional[str]) -> Optional[Asset]:
@@ -146,11 +153,24 @@ def _enum_transformer(enum: Type[T]) -> Callable[[AuditLogEntry, int], T]:
 
     return _transform
 
-def _transform_type(entry: AuditLogEntry, data: Union[int]) -> Union[enums.ChannelType, enums.StickerType]:
+
+def _transform_type(entry: AuditLogEntry, data: int) -> Union[enums.ChannelType, enums.StickerType]:
     if entry.action.name.startswith('sticker_'):
         return enums.try_enum(enums.StickerType, data)
     else:
         return enums.try_enum(enums.ChannelType, data)
+
+
+def _transform_timestamp(entry: AuditLogEntry, data: str) -> Optional[datetime.datetime]:
+    return utils.parse_time(data)
+
+
+def _transform_privacy_level(entry: AuditLogEntry, data: str) -> Union[enums.GuildEventPrivacyLevel, enums.StagePrivacyLevel]:
+    if entry.action.name.startswith('guild_scheduled'):
+        return enums.try_enum(enums.GuildEventPrivacyLevel, data)
+    else:
+        return enums.try_enum(enums.StagePrivacyLevel, data)
+
 
 class AuditLogDiff:
     def __len__(self) -> int:
@@ -206,9 +226,13 @@ class AuditLogChanges:
         'region':                        (None, _enum_transformer(enums.VoiceRegion)),
         'rtc_region':                    (None, _enum_transformer(enums.VoiceRegion)),
         'video_quality_mode':            (None, _enum_transformer(enums.VideoQualityMode)),
-        'privacy_level':                 (None, _enum_transformer(enums.StagePrivacyLevel)),
+        'privacy_level':                 (None, _transform_privacy_level),
         'format_type':                   (None, _enum_transformer(enums.StickerFormatType)),
         'type':                          (None, _transform_type),
+        'communication_disabled_until':  ('timeout', _transform_timestamp),
+        'status':                        (None, _enum_transformer(enums.GuildEventStatus)),
+        'entity_type':                   ('location_type', _enum_transformer(enums.GuildEventLocationType)),
+        'location':                      ('external_location', None)
     }
     # fmt: on
 
@@ -522,3 +546,6 @@ class AuditLogEntry(Hashable):
 
     def _convert_target_thread(self, target_id: int) -> Union[Thread, Object]:
         return self.guild.get_thread(target_id) or Object(id=target_id)
+
+    def _convert_target_guild_event(self, target_id: int) -> Union[GuildEvent, Object]:
+        return self.guild.get_event(target_id) or Object(id=target_id)

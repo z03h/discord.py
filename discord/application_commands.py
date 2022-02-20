@@ -38,9 +38,9 @@ from .channel import (
     StoreChannel,
     StageChannel,
     Thread,
-    _guild_channel_factory,
+    _threaded_guild_channel_factory,
 )
-from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType
+from .enums import ApplicationCommandType, ApplicationCommandOptionType, ChannelType, try_enum
 from .errors import IncompatibleCommandSignature
 from .member import Member
 from .message import Attachment, Message
@@ -626,7 +626,7 @@ def _get_application_command_options(
 
         result[name] = value
 
-    if len(option_kwargs):
+    if option_kwargs:
         for attr, annotation in annotations.items():
             if attr in result:
                 continue
@@ -707,6 +707,9 @@ class ApplicationCommandMeta(type):
                 type = ApplicationCommandType.chat_input
 
         if not isinstance(type, ApplicationCommandType):
+            type = try_enum(ApplicationCommandType, type)
+
+        if not isinstance(type, ApplicationCommandType):
             raise TypeError('application command types must be an ApplicationCommandType.')
 
         if 'callback' in attrs and not callable(attrs['callback']):
@@ -760,13 +763,13 @@ class ApplicationCommandMeta(type):
             'options': [],
         }
 
-        if len(children := cls.__application_command_children__):
+        if children := cls.__application_command_children__:
             option_type = ApplicationCommandOptionType.subcommand_group
             payload['options'].extend(command.to_option_dict() for command in children.values())
         else:
             option_type = ApplicationCommandOptionType.subcommand
 
-        if len(options := cls.__application_command_options__):
+        if options := cls.__application_command_options__:
             payload['options'].extend(option.to_dict() for option in options.values())
 
         if not payload['options']:
@@ -786,10 +789,10 @@ class ApplicationCommandMeta(type):
         if cls.__application_command_type__ is ApplicationCommandType.chat_input:
             payload['description'] = cls.__application_command_description__
 
-        if len(children := cls.__application_command_children__):
+        if children := cls.__application_command_children__:
             payload['options'].extend(command.to_option_dict() for command in children.values())
 
-        if len(options := cls.__application_command_options__):
+        if options := cls.__application_command_options__:
             payload['options'].extend(option.to_dict() for option in options.values())
 
         if not payload['options']:
@@ -800,10 +803,10 @@ class ApplicationCommandMeta(type):
     def _match_key(cls) -> Tuple[Any, ...]:
         options = []
 
-        if len(children := cls.__application_command_children__):
+        if children := cls.__application_command_children__:
             options.extend(command._option_match_key() for command in children.values())
 
-        if len(options_ := cls.__application_command_options__):
+        if options_ := cls.__application_command_options__:
             options.extend(option._match_key() for option in options_.values())
 
         return (
@@ -820,7 +823,7 @@ class ApplicationCommandMeta(type):
         if has_children := len(children := cls.__application_command_children__):
             options.extend(command._option_match_key() for command in children.values())
 
-        if len(options_ := cls.__application_command_options__):
+        if options_ := cls.__application_command_options__:
             options.extend(option._match_key() for option in options_.values())
 
         return (
@@ -976,7 +979,6 @@ class ApplicationCommandStore:
                     result = result[0].get('options', [])
 
                 break
-
         return command(), result
 
     def _resolve_user(
@@ -1047,11 +1049,11 @@ class ApplicationCommandStore:
 
             elif type == 7:
                 # Prefer from cache (Data is only partial)
-                cached = self.state.get_channel(int(value))
+                cached = (guild.get_channel_or_thread if guild else self.state.get_channel)(int(value))
                 if cached is None:
                     channel_data = defaultdict(lambda: None)
                     channel_data.update(resolved['channels'][value])
-                    factory, _ = _guild_channel_factory(channel_data['type'])
+                    factory, _ = _threaded_guild_channel_factory(channel_data['type'])
                     value = factory(state=self.state, data=channel_data, guild=guild)
                 else:
                     value = cached
@@ -1063,7 +1065,11 @@ class ApplicationCommandStore:
                 value = Role(state=self.state, data=role_data, guild=guild)
 
             elif type == 9:
-                value = Object(id=int(value))
+                try:
+                    role_data = resolved['roles'][value]
+                    value = Role(state=self.state, data=role_data, guild=guild)
+                except KeyError:
+                    value = self._resolve_user(resolved=resolved, guild=guild, user_id=value)
 
             elif type == 11:
                 attachment = resolved['attachments'][value]

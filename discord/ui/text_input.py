@@ -92,7 +92,7 @@ class TextInput(ModalItem[M]):
         row: Optional[int] = None,
     ) -> None:
         super().__init__()
-        self._provided_custom_id = custom_id is not None
+        self._provided_custom_id = custom_id is not MISSING
         self._value: Optional[str] = None
 
         if custom_id is MISSING:

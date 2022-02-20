@@ -75,6 +75,8 @@ __all__ = (
     'ThreadConverter',
     'GuildChannelConverter',
     'GuildStickerConverter',
+    'PartialMessageableConverter',
+    'GuildEventConverter',
     'clean_content',
     'Greedy',
     'run_converters',
@@ -190,6 +192,9 @@ class MemberConverter(IDConverter[discord.Member]):
         optionally caching the result if :attr:`.MemberCacheFlags.joined` is enabled.
     """
 
+    def __init__(self, *, fetch=True):
+        self.fetch = fetch
+
     async def query_member_named(self, guild, argument):
         cache = guild._state.member_cache_flags.joined
         if len(argument) > 5 and argument[-5] == '#':
@@ -244,10 +249,11 @@ class MemberConverter(IDConverter[discord.Member]):
             if guild is None:
                 raise MemberNotFound(argument)
 
-            if user_id is not None:
-                result = await self.query_member_by_id(bot, guild, user_id)
-            else:
-                result = await self.query_member_named(guild, argument)
+            if self.fetch:
+                if user_id is not None:
+                    result = await self.query_member_by_id(bot, guild, user_id)
+                else:
+                    result = await self.query_member_named(guild, argument)
 
             if not result:
                 raise MemberNotFound(argument)
@@ -275,6 +281,9 @@ class UserConverter(IDConverter[discord.User]):
         and it's not available in cache.
     """
 
+    def __init__(self, *, fetch=True):
+        self.fetch = fetch
+
     async def convert(self, ctx: Context, argument: str) -> discord.User:
         match = self._get_id_match(argument) or re.match(r'<@!?([0-9]{15,20})>$', argument)
         result = None
@@ -284,6 +293,8 @@ class UserConverter(IDConverter[discord.User]):
             user_id = int(match.group(1))
             result = ctx.bot.get_user(user_id) or _utils_get(ctx.message.mentions, id=user_id)
             if result is None:
+                if not self.fetch:
+                    raise UserNotFound(argument)
                 try:
                     result = await ctx.bot.fetch_user(user_id)
                 except discord.HTTPException:
@@ -349,6 +360,8 @@ class PartialMessageConverter(Converter[discord.PartialMessage]):
             guild_id = None
         else:
             guild_id = int(guild_id)
+        if channel_id is None:
+            channel_id = ctx.channel.id
         return guild_id, message_id, channel_id
 
     @staticmethod
@@ -833,7 +846,7 @@ class GuildStickerConverter(IDConverter[discord.GuildSticker]):
     The lookup strategy is as follows (in order):
 
     1. Lookup by ID.
-    3. Lookup by name
+    2. Lookup by name
 
     .. versionadded:: 2.0
     """
@@ -859,6 +872,74 @@ class GuildStickerConverter(IDConverter[discord.GuildSticker]):
 
         if result is None:
             raise GuildStickerNotFound(argument)
+
+        return result
+
+
+class PartialMessageableConverter(IDConverter[discord.PartialMessageable]):
+    """Converts ID or mention to a :class:`discord.PartialMessageable`.
+
+    .. versionadded:: 2.0
+    """
+
+    async def convert(self, ctx: Context, argument: str) -> discord.PartialMessageable:
+        match = self._get_id_match(argument) or re.match(r'<#([0-9]{15,20})>$', argument)
+        if not match:
+            raise ChannelNotFound(argument)
+        return ctx.bot.get_partial_messageable(int(match.group(1)))
+
+
+class GuildEventConverter(IDConverter[discord.GuildEvent]):
+    """Converts to a :class:`discord.GuildEvent`.
+
+    .. versionadded:: 2.0
+
+    All lookups are done for the local guild.
+    If in a DM context, searches all guilds for a matching event.
+
+    The lookup strategy is as follows (in order):
+
+    1. Lookup by ID.
+    2. Lookup by url.
+    3. Lookup by name.
+    """
+
+    async def convert(self, ctx: Context, argument: str) -> discord.GuildEvent:
+        guild = ctx.guild
+        match = self._get_id_match(argument)
+        result = None
+
+        if match:
+            if guild:
+                result = guild.get_event(int(match.group(1)))
+            else:
+                for guild in ctx.bot.guilds:
+                    result = guild.get_event(int(match.group(1)))
+                    if result:
+                        break
+        else:
+            pattern = (
+                r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/events/'
+                r'(?P<guild_id>[0-9]{15,20})'
+                r'(?P<event_id>[0-9]{15,20})'
+            )
+            match = re.match(pattern, argument, flags=re.I)
+            if match:
+                if not guild:
+                    guild = ctx.bot.get_guild(int(match.group(1)))
+                if guild:
+                    event_id = int(match.group(2))
+                    result = guild.get_event(event_id)
+            else:
+                if guild:
+                    result = discord.utils.get(guild.events, name=argument)
+                else:
+                    for guild in ctx.bot.guilds:
+                        result = discord.utils.get(guild.events, name=argument)
+                        if result:
+                            break
+        if result is None:
+            raise GuildEventNotFound(argument)
 
         return result
 
@@ -1053,6 +1134,8 @@ CONVERTER_MAPPING: Dict[Type[Any], Any] = {
     discord.Thread: ThreadConverter,
     discord.abc.GuildChannel: GuildChannelConverter,
     discord.GuildSticker: GuildStickerConverter,
+    discord.PartialMessageable: PartialMessageableConverter,
+    discord.GuildEvent: GuildEventConverter,
 }
 
 

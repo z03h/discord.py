@@ -348,6 +348,7 @@ class AsyncWebhookAdapter:
         session: aiohttp.ClientSession,
         type: int,
         data: Optional[Dict[str, Any]] = None,
+        files: Optional[List[File]] = None,
     ) -> Response[None]:
         payload: Dict[str, Any] = {
             'type': type,
@@ -356,6 +357,11 @@ class AsyncWebhookAdapter:
         if data is not None:
             payload['data'] = data
 
+        form = None
+        if files is not None:
+            form = utils.resolve_multipart(payload, files, msg_payload=payload.get('data'))
+            payload = None
+
         route = Route(
             'POST',
             '/interactions/{webhook_id}/{webhook_token}/callback',
@@ -363,7 +369,7 @@ class AsyncWebhookAdapter:
             webhook_token=token,
         )
 
-        return self.request(route, session=session, payload=payload)
+        return self.request(route, session=session, payload=payload, multipart=form, files=files)
 
     def get_original_interaction_response(
         self,
@@ -483,7 +489,13 @@ def handle_message_parameters(
     if file is not MISSING:
         files = [file]
 
-    multipart = utils.resolve_multipart(payload, files) if files else None
+    if files:
+        multipart = utils.resolve_multipart(payload, files)
+        multipart.append({'name': 'payload_json', 'value': utils._to_json(payload)})
+        payload = None
+    else:
+        multipart = []
+
     return ExecuteWebhookParameters(payload=payload, multipart=multipart, files=files)
 
 

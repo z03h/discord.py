@@ -36,6 +36,7 @@ from .errors import InteractionResponded, HTTPException, ClientException
 from .channel import PartialMessageable, ChannelType
 
 from .user import User
+from .file import File
 from .member import Member
 from .message import Message, Attachment
 from .object import Object
@@ -66,15 +67,16 @@ if TYPE_CHECKING:
     from .application_commands import (
         ApplicationCommandOption as NativeCommandOption,
         ApplicationCommandOptionChoice as NativeCommandChoice,
+        ApplicationCommandMeta as NativeApplicationCommand,
     )
     from .client import Client
     from .enums import (
         ApplicationCommandType,
-        ApplicationCommandOptionType
+        ApplicationCommandOptionType,
+        try_enum
     )
     from .guild import Guild
     from .state import ConnectionState
-    from .file import File
     from .mentions import AllowedMentions
     from .embeds import Embed
     from .ui.modal import Modal
@@ -330,14 +332,14 @@ class ApplicationCommand(Hashable):
         return f'<ApplicationCommand id={self.id}{guild_id} name={self.name!r} type={self.type.name!r}>'
 
     def _from_data(self, data: ApplicationCommandPayload) -> None:
-        self.type = ApplicationCommandType(data.get('type', 1))
+        self.type = try_enum(ApplicationCommandType, data.get('type', 1))
         self.name = data['name']
-        self.description = data['description']
+        self.description = data.get('description')
         self.id = utils._get_as_snowflake(data, 'id')
         self.guild_id = utils._get_as_snowflake(data, 'guild_id')
         self.application_id = utils._get_as_snowflake(data, 'application_id')
         self.default_permission = data.get('default_permission', True)
-        self.version = int(data['version'])
+        self.version = int(data.get('version', 0))
 
         if 'options' in data:
             self.options = [
@@ -475,6 +477,21 @@ class ApplicationCommand(Hashable):
             frozenset(option._match_key() for option in self.options) if self.options else None,
         )
 
+    @classmethod
+    def from_native(
+        cls,
+        native_command: NativeApplicationCommand,
+        *,
+        id: int,
+        guild_id: int = MISSING,
+        state: ConnectionState
+    ):
+        data = native_command.to_dict()
+        data['id'] = id
+        if guild_id is not MISSING:
+            data['guild_id'] = guild_id
+        return cls(data=data, state=state)
+
 
 class Interaction:
     """Represents a Discord interaction.
@@ -500,6 +517,10 @@ class Interaction:
         The application ID that the interaction was for.
     user: Optional[Union[:class:`User`, :class:`Member`]]
         The user or member that sent the interaction.
+    locale: Optional[:class:`str`]
+        The selected language of the invoking user.
+    guild_locale: Optional[:class:`str`]
+        The guilds preferred locale, if in a guild context.
     message: Optional[:class:`Message`]
         The message that sent this interaction.
     target: Optional[Union[:class:`User`, :class:`Member`, :class:`Message`]]
@@ -543,6 +564,8 @@ class Interaction:
         'version',
         'client',
         'value',
+        'locale',
+        'guild_locale',
         '_permissions',
         '_state',
         '_session',
@@ -568,6 +591,8 @@ class Interaction:
         self.channel_id: Optional[int] = utils._get_as_snowflake(data, 'channel_id')
         self.guild_id: Optional[int] = utils._get_as_snowflake(data, 'guild_id')
         self.application_id: int = int(data['application_id'])
+        self.locale: Optional[str] = data.get('locale')
+        self.guild_locale: Optional[str] = data.get('guild_locale')
 
         self.message: Optional[Message]
         try:
@@ -789,7 +814,8 @@ class Interaction:
         )
 
         # The message channel types should always match
-        message = InteractionMessage(state=self._state, channel=self.channel, data=data)  # type: ignore
+        state = _InteractionMessageState(self, self._state)
+        message = InteractionMessage(state=state, channel=self.channel, data=data)  # type: ignore
         if view and not view.is_finished():
             self._state.store_view(view, message.id)
         return message
@@ -841,7 +867,7 @@ class InteractionResponse:
         """
         return self._responded
 
-    async def defer(self, *, ephemeral: bool = False) -> None:
+    async def defer(self, *, loading: bool = False, ephemeral: bool = False) -> None:
         """|coro|
 
         Defers the interaction response.
@@ -851,9 +877,18 @@ class InteractionResponse:
 
         Parameters
         -----------
+        loading: :class:`bool`
+            Whether the user should see a loading state.
+
+            .. note::
+
+                You must use the ``ephemeral`` kwarg to send ephemeral followups
+                when this is set to ``True``.
+
         ephemeral: :class:`bool`
             Indicates whether the deferred message will eventually be ephemeral.
-            This only applies for interactions of type :attr:`InteractionType.application_command`.
+            This only applies if ``loading`` is set to ``True`` or for interactions
+            of type :attr:`InteractionType.application_command`.
 
         Raises
         -------
@@ -868,12 +903,12 @@ class InteractionResponse:
         defer_type: int = 0
         data: Optional[Dict[str, Any]] = None
         parent = self._parent
-        if parent.type is InteractionType.component:
-            defer_type = InteractionResponseType.deferred_message_update.value
-        elif parent.type is InteractionType.application_command:
+        if loading or parent.type is InteractionType.application_command:
             defer_type = InteractionResponseType.deferred_channel_message.value
             if ephemeral:
                 data = {'flags': 64}
+        elif parent.type in (InteractionType.component, InteractionType.modal_submit):
+            defer_type = InteractionResponseType.deferred_message_update.value
 
         if defer_type:
             adapter = async_context.get()
@@ -913,6 +948,9 @@ class InteractionResponse:
         *,
         embed: Embed = MISSING,
         embeds: List[Embed] = MISSING,
+        allowed_mentions: AllowedMentions = MISSING,
+        file: File = MISSING,
+        files: List[File] = MISSING,
         view: View = MISSING,
         tts: bool = False,
         ephemeral: bool = False,
@@ -931,6 +969,19 @@ class InteractionResponse:
         embed: :class:`Embed`
             The rich embed for the content to send. This cannot be mixed with
             ``embeds`` parameter.
+        allowed_mentions: :class:`AllowedMentions`
+            Controls the mentions being processed in this message.
+            See :meth:`.abc.Messageable.send` for more information.
+
+            .. versionadded:: 2.0
+        file: :class:`~discord.File`
+            The new file to add. Cannot be mixed with ``files``.
+
+            .. versionadded:: 2.0
+        files: List[:class:`~discord.File`]
+            The new files to add. Cannot be mixed with ``file``.
+
+            .. versionadded:: 2.0
         tts: :class:`bool`
             Indicates if the message should be sent using text-to-speech.
         view: :class:`discord.ui.View`
@@ -945,9 +996,9 @@ class InteractionResponse:
         HTTPException
             Sending the message failed.
         TypeError
-            You specified both ``embed`` and ``embeds``.
+            You specified both ``embed`` and ``embeds`` or ``file`` and ``files``.
         ValueError
-            The length of ``embeds`` was invalid.
+            The length of ``embeds`` or ``files`` was invalid.
         InteractionResponded
             This interaction has already been responded to before.
         """
@@ -972,11 +1023,32 @@ class InteractionResponse:
         if content is not None:
             payload['content'] = str(content)
 
+        previous_allowed_mentions: Optional[AllowedMentions] = getattr(self._parent._state, 'allowed_mentions', None)
+        if allowed_mentions is not MISSING:
+            if previous_allowed_mentions is not None:
+                payload['allowed_mentions'] = previous_allowed_mentions.merge(allowed_mentions).to_dict()
+            else:
+                payload['allowed_mentions'] = allowed_mentions.to_dict()
+        elif previous_allowed_mentions is not None:
+            payload['allowed_mentions'] = previous_allowed_mentions.to_dict()
+
         if ephemeral:
             payload['flags'] = 64
 
         if view is not MISSING:
             payload['components'] = view.to_components()
+
+        if file is not MISSING and files is not MISSING:
+            raise TypeError('cannot mix file and files keyword arugments')
+
+        if file is not MISSING:
+            files = [file]
+
+        if files is not MISSING:
+            if len(files) > 10:
+                raise ValueError('files cannot exceed maximum of 10 elements')
+        else:
+            files = None
 
         parent = self._parent
         adapter = async_context.get()
@@ -986,6 +1058,7 @@ class InteractionResponse:
             session=parent._session,
             type=InteractionResponseType.channel_message.value,
             data=payload,
+            files=files
         )
 
         if view is not MISSING:
@@ -1002,8 +1075,11 @@ class InteractionResponse:
         content: Optional[Any] = MISSING,
         embed: Optional[Embed] = MISSING,
         embeds: List[Embed] = MISSING,
+        file: File = MISSING,
+        files: List[File] = MISSING,
         attachments: List[Attachment] = MISSING,
         view: Optional[View] = MISSING,
+        allowed_mentions: AllowedMentions = MISSING,
     ) -> None:
         """|coro|
 
@@ -1019,9 +1095,22 @@ class InteractionResponse:
         embed: Optional[:class:`Embed`]
             The embed to edit the message with. ``None`` suppresses the embeds.
             This should not be mixed with the ``embeds`` parameter.
+        file: :class:`~discord.File`
+            The new file to add. Cannot be mixed with ``files``.
+
+            .. versionadded:: 2.0
+        files: List[:class:`~discord.File`]
+            The new files to add. Cannot be mixed with ``file``.
+
+            .. versionadded:: 2.0
         attachments: List[:class:`Attachment`]
             A list of attachments to keep in the message. If ``[]`` is passed
             then all attachments are removed.
+        allowed_mentions: :class:`AllowedMentions`
+            Controls the mentions being processed in this message.
+            See :meth:`.abc.Messageable.send` for more information.
+
+            .. versionadded:: 2.0
         view: Optional[:class:`~discord.ui.View`]
             The updated view to update this message with. If ``None`` is passed then
             the view is removed.
@@ -1031,7 +1120,7 @@ class InteractionResponse:
         HTTPException
             Editing the message failed.
         TypeError
-            You specified both ``embed`` and ``embeds``.
+            You specified both ``embed`` and ``embeds`` or ``file`` and ``files``.
         InteractionResponded
             This interaction has already been responded to before.
         """
@@ -1067,12 +1156,30 @@ class InteractionResponse:
         if attachments is not MISSING:
             payload['attachments'] = [a.to_dict() for a in attachments]
 
+        previous_allowed_mentions: Optional[AllowedMentions] = getattr(self._parent._state, 'allowed_mentions', None)
+        if allowed_mentions is not MISSING:
+            if previous_allowed_mentions is not None:
+                payload['allowed_mentions'] = previous_allowed_mentions.merge(allowed_mentions).to_dict()
+            else:
+                payload['allowed_mentions'] = allowed_mentions.to_dict()
+        elif previous_allowed_mentions is not None:
+            payload['allowed_mentions'] = previous_allowed_mentions.to_dict()
+
         if view is not MISSING:
             state.prevent_view_updates_for(message_id)
             if view is None:
                 payload['components'] = []
             else:
                 payload['components'] = view.to_components()
+
+        if file is not MISSING and files is not MISSING:
+            raise TypeError('cannot mix file and files keyword arugments')
+
+        if file is not MISSING:
+            files = [file]
+
+        if files is MISSING:
+            files = None
 
         adapter = async_context.get()
         await adapter.create_interaction_response(
@@ -1081,6 +1188,7 @@ class InteractionResponse:
             session=parent._session,
             type=InteractionResponseType.message_update.value,
             data=payload,
+            files=files,
         )
 
         if view and not view.is_finished():

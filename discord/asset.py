@@ -190,11 +190,13 @@ class Asset(AssetMixin):
 
     @classmethod
     def _from_icon(cls, state, object_id: int, icon_hash: str, path: str) -> Asset:
+        animated = icon_hash.startswith('a_')
+        format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/{path}-icons/{object_id}/{icon_hash}.png?size=1024',
+            url=f'{cls.BASE}/{path}-icons/{object_id}/{icon_hash}.{format}?size=1024',
             key=icon_hash,
-            animated=False,
+            animated=animated,
         )
 
     @classmethod
@@ -208,11 +210,13 @@ class Asset(AssetMixin):
 
     @classmethod
     def _from_guild_image(cls, state, guild_id: int, image: str, path: str) -> Asset:
+        animated = image.startswith('a_')
+        format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/{path}/{guild_id}/{image}.png?size=1024',
+            url=f'{cls.BASE}/{path}/{guild_id}/{image}.{format}?size=1024',
             key=image,
-            animated=False,
+            animated=animated,
         )
 
     @classmethod
@@ -222,17 +226,6 @@ class Asset(AssetMixin):
         return cls(
             state,
             url=f'{cls.BASE}/icons/{guild_id}/{icon_hash}.{format}?size=1024',
-            key=icon_hash,
-            animated=animated,
-        )
-
-    @classmethod
-    def _from_role_icon(cls, state, role_id: int, icon_hash: str) -> Asset:
-        animated = icon_hash.startswith('a_')
-        format = 'gif' if animated else 'png'
-        return cls(
-            state,
-            url=f'{cls.BASE}/role-icons/{role_id}/{icon_hash}.{format}',
             key=icon_hash,
             animated=animated,
         )
@@ -254,6 +247,17 @@ class Asset(AssetMixin):
             state,
             url=f'{cls.BASE}/banners/{user_id}/{banner_hash}.{format}?size=512',
             key=banner_hash,
+            animated=animated
+        )
+
+    @classmethod
+    def _from_guild_event_image(cls, state, event_id: int, image_hash: str) -> Asset:
+        animated = image_hash.startswith('a_')
+        format = 'gif' if animated else 'png'
+        return cls(
+            state,
+            url=f'{cls.BASE}/guild-events/{event_id}/{image_hash}.{format}?size=1024',
+            key=image_hash,
             animated=animated
         )
 
@@ -319,6 +323,7 @@ class Asset(AssetMixin):
         """
         url = yarl.URL(self._url)
         path, _ = os.path.splitext(url.path)
+        queries = dict(url.query)
 
         if format is not MISSING:
             if self._animated:
@@ -327,19 +332,24 @@ class Asset(AssetMixin):
             else:
                 if format not in VALID_STATIC_FORMATS:
                     raise InvalidArgument(f'format must be one of {VALID_STATIC_FORMATS}')
+            if format in ('gif', 'webp'):
+                queries['quality'] = 'lossless'
             url = url.with_path(f'{path}.{format}')
 
         if static_format is not MISSING and not self._animated:
             if static_format not in VALID_STATIC_FORMATS:
                 raise InvalidArgument(f'static_format must be one of {VALID_STATIC_FORMATS}')
+            if static_format in ('gif', 'webp'):
+                queries['quality'] = 'lossless'
             url = url.with_path(f'{path}.{static_format}')
 
         if size is not MISSING:
             if not utils.valid_icon_size(size):
                 raise InvalidArgument('size must be a power of 2 between 16 and 4096')
-            url = url.with_query(size=size)
-        else:
-            url = url.with_query(url.raw_query_string)
+            queries['size'] = size
+
+        if queries:
+            url = url.update_query(**queries)
 
         url = str(url)
         return Asset(state=self._state, url=url, key=self._key, animated=self._animated)
@@ -365,7 +375,7 @@ class Asset(AssetMixin):
         if not utils.valid_icon_size(size):
             raise InvalidArgument('size must be a power of 2 between 16 and 4096')
 
-        url = str(yarl.URL(self._url).with_query(size=size))
+        url = str(yarl.URL(self._url).update_query(size=size))
         return Asset(state=self._state, url=url, key=self._key, animated=self._animated)
 
     def with_format(self, format: ValidAssetFormatTypes, /) -> Asset:
@@ -396,7 +406,10 @@ class Asset(AssetMixin):
 
         url = yarl.URL(self._url)
         path, _ = os.path.splitext(url.path)
-        url = str(url.with_path(f'{path}.{format}').with_query(url.raw_query_string))
+        url = url.with_path(f'{path}.{format}').with_query(url.raw_query_string)
+        if format in ('gif', 'webp'):
+            url = url.update_query(quality='lossless')
+        url = str(url)
         return Asset(state=self._state, url=url, key=self._key, animated=self._animated)
 
     def with_static_format(self, format: ValidStaticFormatTypes, /) -> Asset:

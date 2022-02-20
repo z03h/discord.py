@@ -34,6 +34,7 @@ from typing import Dict, TYPE_CHECKING, Union, List, Optional, Any, Callable, Tu
 from . import utils
 from .reaction import Reaction
 from .emoji import Emoji
+from .channel import PartialMessageable
 from .partial_emoji import PartialEmoji
 from .enums import MessageType, ChannelType, try_enum
 from .errors import InvalidArgument, HTTPException
@@ -70,7 +71,7 @@ if TYPE_CHECKING:
     from .abc import GuildChannel, PartialMessageableChannel, MessageableChannel
     from .components import Component
     from .state import ConnectionState
-    from .channel import TextChannel, GroupChannel, DMChannel, PartialMessageable
+    from .channel import TextChannel, GroupChannel, DMChannel
     from .mentions import AllowedMentions
     from .user import User
     from .role import Role
@@ -345,7 +346,7 @@ class Attachment(Hashable):
         kwargs = {
             'filename': self.filename,
             'description': self.description,
-            'spoiler': self.spoiler,
+            'spoiler': self.is_spoiler(),
             **overrides,
         }
         return File(io.BytesIO(data), **kwargs)
@@ -648,6 +649,11 @@ class Message(Hashable):
         .. versionadded:: 2.0
     guild: Optional[:class:`Guild`]
         The guild that the message belongs to, if applicable.
+
+    thread: Optional[:class:`Thread`]
+        The thread that was started from this message, if applicable.
+
+        .. versionadded:: 2.0
     """
 
     __slots__ = (
@@ -681,6 +687,7 @@ class Message(Hashable):
         'stickers',
         'components',
         'guild',
+        'thread'
     )
 
     if TYPE_CHECKING:
@@ -718,6 +725,10 @@ class Message(Hashable):
         self.nonce: Optional[Union[int, str]] = data.get('nonce')
         self.stickers: List[StickerItem] = [StickerItem(data=d, state=state) for d in data.get('sticker_items', [])]
         self.components: List[Component] = [_component_factory(d) for d in data.get('components', [])]
+        self.thread: Optional[Thread] = None
+        thread = data.get('thread')
+        if thread is not None:
+            self.thread = Thread(guild=channel.guild, state=state, data=thread)
 
         try:
             # if the channel doesn't have a guild attribute, we handle that
@@ -743,7 +754,8 @@ class Message(Hashable):
                     if ref.channel_id == channel.id:
                         chan = channel
                     else:
-                        chan, _ = state._get_guild_channel(resolved)
+                        # guild_id may be missing from resolved data
+                        chan, _ = state._get_guild_channel(data['message_reference'])
 
                     # the channel will be the correct type here
                     ref.resolved = self.__class__(channel=chan, data=resolved, state=state)  # type: ignore
@@ -1203,6 +1215,7 @@ class Message(Hashable):
         attachments: List[Attachment] = ...,
         suppress: bool = ...,
         delete_after: Optional[float] = ...,
+        files: List[File] = ...,
         allowed_mentions: Optional[AllowedMentions] = ...,
         view: Optional[View] = ...,
     ) -> Message:
@@ -1217,6 +1230,37 @@ class Message(Hashable):
         attachments: List[Attachment] = ...,
         suppress: bool = ...,
         delete_after: Optional[float] = ...,
+        file: File = ...,
+        allowed_mentions: Optional[AllowedMentions] = ...,
+        view: Optional[View] = ...,
+    ) -> Message:
+        ...
+
+    @overload
+    async def edit(
+        self,
+        *,
+        content: Optional[str] = ...,
+        embed: Optional[Embed] = ...,
+        attachments: List[Attachment] = ...,
+        suppress: bool = ...,
+        delete_after: Optional[float] = ...,
+        file: File = ...,
+        allowed_mentions: Optional[AllowedMentions] = ...,
+        view: Optional[View] = ...,
+    ) -> Message:
+        ...
+
+    @overload
+    async def edit(
+        self,
+        *,
+        content: Optional[str] = ...,
+        embeds: List[Embed] = ...,
+        attachments: List[Attachment] = ...,
+        suppress: bool = ...,
+        delete_after: Optional[float] = ...,
+        files: List[File] = ...,
         allowed_mentions: Optional[AllowedMentions] = ...,
         view: Optional[View] = ...,
     ) -> Message:
@@ -1230,6 +1274,8 @@ class Message(Hashable):
         attachments: List[Attachment] = MISSING,
         suppress: bool = MISSING,
         delete_after: Optional[float] = None,
+        file: File = MISSING,
+        files: List[File] = MISSING,
         allowed_mentions: Optional[AllowedMentions] = MISSING,
         view: Optional[View] = MISSING,
     ) -> Message:
@@ -1253,6 +1299,14 @@ class Message(Hashable):
         embeds: List[:class:`Embed`]
             The new embeds to replace the original with. Must be a maximum of 10.
             To remove all embeds ``[]`` should be passed.
+
+            .. versionadded:: 2.0
+        file: :class:`~discord.File`
+            The new file to add. Cannot be mixed with ``files``.
+
+            .. versionadded:: 2.0
+        files: List[:class:`~discord.File`]
+            The new files to add. Cannot be mixed with ``file``.
 
             .. versionadded:: 2.0
         attachments: List[:class:`Attachment`]
@@ -1288,8 +1342,9 @@ class Message(Hashable):
             Tried to suppress a message without permissions or
             edited a message's content or embed that isn't yours.
         ~discord.InvalidArgument
-            You specified both ``embed`` and ``embeds``
+            You specified both ``embed`` and ``embeds`` or ``file`` and ``files``.
         """
+        edit_method = self._state.http.edit_message
 
         payload: Dict[str, Any] = {}
         if content is not MISSING:
@@ -1308,6 +1363,22 @@ class Message(Hashable):
                 payload['embeds'] = [embed.to_dict()]
         elif embeds is not MISSING:
             payload['embeds'] = [e.to_dict() for e in embeds]
+
+        if file is not MISSING and files is not MISSING:
+            raise InvalidArgument('cannot pass both file and files parameter to edit()')
+
+        if files is not MISSING:
+            if len(files) > 10:
+                raise InvalidArgument('files parameter must be a list of up to 10 elements')
+            elif not all(isinstance(file, File) for file in files):
+                raise InvalidArgument('files parameter must be a list of File')
+            payload['files'] = files
+            edit_method = self._state.http.edit_files
+        elif file is not MISSING:
+            if not isinstance(file, File):
+                raise InvalidArgument('file parameter must be File')
+            payload['files'] = [file]
+            edit_method = self._state.http.edit_files
 
         if suppress is not MISSING:
             flags = MessageFlags._from_value(self.flags.value)
@@ -1334,7 +1405,7 @@ class Message(Hashable):
             else:
                 payload['components'] = []
 
-        data = await self._state.http.edit_message(self.channel.id, self.id, **payload)
+        data = await edit_method(self.channel.id, self.id, **payload)
         message = Message(state=self._state, channel=self.channel, data=data)
 
         if view and not view.is_finished():
@@ -1539,7 +1610,14 @@ class Message(Hashable):
         """
         await self._state.http.clear_reactions(self.channel.id, self.id)
 
-    async def create_thread(self, *, name: str, auto_archive_duration: ThreadArchiveDuration = MISSING) -> Thread:
+    async def create_thread(
+        self,
+        *,
+        name: str,
+        auto_archive_duration: ThreadArchiveDuration = MISSING,
+        slowmode_delay: int = 0,
+        reason: Optional[str] = None
+    ) -> Thread:
         """|coro|
 
         Creates a public thread from this message.
@@ -1558,6 +1636,12 @@ class Message(Hashable):
         auto_archive_duration: :class:`int`
             The duration in minutes before a thread is automatically archived for inactivity.
             If not provided, the channel's default auto archive duration is used.
+        slowmode_delay: :class:`int`
+            Specifies the slowmode rate limit for user in this channel, in seconds.
+            A value of `0` disables slowmode. The maximum value possible is `21600`.
+        reason: Optional[:class:`str`]
+            The reason for creating this thread.
+            Shows up on the audit log.
 
         Raises
         -------
@@ -1582,6 +1666,8 @@ class Message(Hashable):
             self.id,
             name=name,
             auto_archive_duration=auto_archive_duration or default_auto_archive_duration,
+            slowmode_delay=slowmode_delay,
+            reason=reason
         )
         return Thread(guild=self.guild, state=self._state, data=data)
 
@@ -1704,8 +1790,8 @@ class PartialMessage(Hashable):
             ChannelType.news_thread,
             ChannelType.public_thread,
             ChannelType.private_thread,
-        ):
-            raise TypeError(f'Expected TextChannel, DMChannel or Thread not {type(channel)!r}')
+        ) and not isinstance(channel, PartialMessage):
+            raise TypeError(f'Expected TextChannel, DMChannel, Thread or PartialMessageable not {type(channel)!r}')
 
         self.channel: PartialMessageableChannel = channel
         self._state: ConnectionState = channel._state
@@ -1774,6 +1860,23 @@ class PartialMessage(Hashable):
         embed: Optional[:class:`Embed`]
             The new embed to replace the original with.
             Could be ``None`` to remove the embed.
+        embeds: List[:class:`Embed`]
+            The new embeds to replace the original with. Must be a maximum of 10.
+            To remove all embeds ``[]`` should be passed.
+
+            .. versionadded:: 2.0
+        file: :class:`~discord.File`
+            New file to add to the message. Cannot be used with ``files``.
+
+            .. versionadded:: 2.0
+        files: List[:class:`~discord.File`]
+            List of new files to add to the message. Cannot be used with ``file``.
+
+            .. versionadded:: 2.0
+        attachments: List[:class:`Attachment`]
+            List of attachments to keep. Empty list removes attachments.
+
+            .. versionadded:: 2.0
         suppress: :class:`bool`
             Whether to suppress embeds for the message. This removes
             all the embeds if set to ``True``. If set to ``False``
@@ -1805,12 +1908,15 @@ class PartialMessage(Hashable):
         Forbidden
             Tried to suppress a message without permissions or
             edited a message's content or embed that isn't yours.
+        ~discord.InvalidArgument
+            You specified both ``embed`` and ``embeds`` or ``file`` and ``files``.
 
         Returns
         ---------
         Optional[:class:`Message`]
             The message that was edited.
         """
+        edit_method = self._state.http.edit_message
 
         try:
             content = fields['content']
@@ -1820,13 +1926,45 @@ class PartialMessage(Hashable):
             if content is not None:
                 fields['content'] = str(content)
 
+        if 'file' in fields and 'files' in fields:
+            raise InvalidArgument('cannot pass both file and files parameter to edit()')
+
+        if 'files' in fields:
+            files = fields['files']
+            if len(files) > 10:
+                raise InvalidArgument('files parameter must be a list of up to 10 elements')
+            elif not all(isinstance(file, File) for file in files):
+                raise InvalidArgument('files parameter must be a list of File')
+            fields['files'] = files
+            edit_method = self._state.http.edit_files
+        elif 'file' in fields:
+            file = fields.pop('file')
+            if not isinstance(file, File):
+                raise InvalidArgument('file parameter must be File')
+            fields['files'] = [file]
+            edit_method = self._state.http.edit_files
+
+        if 'embed' in fields and 'embeds' in fields:
+            raise InvalidArgument('cannot pass both embed and embeds parameter to edit()')
+        if 'embeds' in fields:
+            if len(fields['embeds']) > 10:
+                raise InvalidArgument('embeds parameter must be a list of up to 10 elements')
+            fields['embeds'] = [embed.to_dict() for embed in fields['embeds']]
+
+        else:
+            try:
+                embed = fields.pop('embed')
+            except KeyError:
+                pass
+            else:
+                fields['embeds'] = [embed.to_dict()] if embed is not None else []
+
         try:
-            embed = fields['embed']
+            attachments = fields.pop('attachments')
         except KeyError:
             pass
         else:
-            if embed is not None:
-                fields['embed'] = embed.to_dict()
+            fields['attachments'] = [a.to_dict() for a in attachments]
 
         try:
             suppress: bool = fields.pop('suppress')
@@ -1864,7 +2002,7 @@ class PartialMessage(Hashable):
                 fields['components'] = []
 
         if fields:
-            data = await self._state.http.edit_message(self.channel.id, self.id, **fields)
+            data = await edit_method(self.channel.id, self.id, **fields)
 
         if delete_after is not None:
             await self.delete(delay=delete_after)

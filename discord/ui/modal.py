@@ -24,12 +24,13 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-import asyncio
 import os
-import traceback
-from typing import Any, Callable, ClassVar, Dict, List, Optional, TYPE_CHECKING, Tuple
-
 import sys
+import time
+import asyncio
+import traceback
+from functools import partial
+from typing import Any, Callable, ClassVar, Dict, List, Optional, TYPE_CHECKING, Tuple
 
 from .abc import ItemContainer
 from .item import ModalItem
@@ -101,7 +102,7 @@ class Modal(ItemContainer[ModalItem], max_width=1, max_children=5):
     __discord_ui_modal_children__: ClassVar[List[ModalItemConstructor]] = []
 
     # noinspection PyMethodOverriding
-    def __init_subclass__(cls, **kwargs) -> None:
+    def __init_subclass__(cls) -> None:
         children = []
         for base in reversed(cls.__mro__):
             for name, member in base.__dict__.items():
@@ -117,7 +118,7 @@ class Modal(ItemContainer[ModalItem], max_width=1, max_children=5):
 
         cls.__discord_ui_modal_children__ = children
 
-    def __init__(self, *, title: str = MISSING, custom_id: str = MISSING, timeout: Optional[float] = None) -> None:
+    def __init__(self, *, title: str, custom_id: str = MISSING, timeout: Optional[float] = 600) -> None:
         self.title: str = title
         self.custom_id = os.urandom(16).hex() if custom_id is MISSING else custom_id
 
@@ -173,11 +174,21 @@ class Modal(ItemContainer[ModalItem], max_width=1, max_children=5):
         """
         pass
 
+    def _start_listening_from_store(self, store: ModalStore) -> None:
+        self._cancel_callback = partial(store.remove_modal)
+        if self.timeout:
+            loop = asyncio.get_running_loop()
+            if self._timeout_task is not None:
+                self._timeout_task.cancel()
+
+            self._timeout_expiry = time.monotonic() + self.timeout
+            self._timeout_task = loop.create_task(self._timeout_task_impl())
+
     def _dispatch_timeout(self):
-        if self.__stopped.done():
+        if self._stopped.done():
             return
 
-        self.__stopped.set_result(True)
+        self._stopped.set_result(True)
         asyncio.create_task(self.on_timeout(), name=f'discord-ui-modal-timeout-{self.custom_id}')
 
     def to_dict(self) -> Dict[str, Any]:
@@ -196,15 +207,17 @@ class ModalStore:
 
     def add_modal(self, modal: Modal):
         self._cleanup()
+        modal._start_listening_from_store(self)
+
         self._modals[modal.custom_id] = modal
 
-    def remove_modal(self, custom_id: str):
-        self._modals.pop(custom_id)
+    def remove_modal(self, modal: Modal):
+        self._modals.pop(modal.custom_id)
 
     def _cleanup(self) -> None:
-        for key, modal in self._modals.items():
-            if modal.is_finished():
-                del self._modals[key]
+        done = [key for key, modal in self._modals.items() if modal.is_finished()]
+        for key in done:
+            del self._modals[key]
 
     @staticmethod
     async def invoke(modal: Modal, interaction: Interaction) -> None:
@@ -223,7 +236,7 @@ class ModalStore:
         try:
             modal = self._modals[key]
         except KeyError:
-            raise RuntimeError(f'received unknown modal with ID {key!r} but it is not stored.')
+            return
 
         for row in interaction.data['components']:
             for child in row['components']:

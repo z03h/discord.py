@@ -303,6 +303,22 @@ class MessageFlags(BaseFlags):
         """
         return 64
 
+    @flag_value
+    def ephemeral(self):
+        """:class:`bool`: Returns ``True`` if the source message is an
+        interaction response and the bot is "thinking".
+        .. versionadded:: 2.0
+        """
+        return 128
+
+    @flag_value
+    def ephemeral(self):
+        """:class:`bool`: Returns ``True`` if the source message failed
+        to mention roles and add their members to the thread.
+
+        .. versionadded:: 2.0
+        """
+        return 256
 
 @fill_with_flags()
 class PublicUserFlags(BaseFlags):
@@ -496,6 +512,7 @@ class Intents(BaseFlags):
         self = cls.all()
         self.presences = False
         self.members = False
+        # self.message_content = False  # delay api v10
         return self
 
     @flag_value
@@ -873,6 +890,55 @@ class Intents(BaseFlags):
         This does not correspond to any attributes or classes in the library in terms of cache.
         """
         return 1 << 14
+
+    # @flag_value  # waiting for api v10 update
+    def message_content(self):
+        """:class:`bool`: Whether you receive message content.
+
+        This corresponds to the following events:
+
+        - :func:`on_message`
+
+        .. note::
+
+            Does not affect messages the bot sends, direct messages, messages
+            the bot is mentioned in.
+
+        This also corresponds to the following attributes and classes in terms of cache:
+
+        - :attr:`Message.content`
+        - :attr:`Message.embeds`
+        - :attr:`Message.attachments`
+        - :attr:`Message.components`
+
+        .. note::
+
+            Currently, this requires opting in explicitly via the developer portal as well.
+            Bots in over 100 guilds will need to apply to Discord for verification.
+
+        """
+        return 1 << 15
+
+    @flag_value
+    def guild_events(self):
+        """:class:`bool`: Whether guild event events are enabled.
+
+        This corresponds to the following events:
+
+        - :func:`on_guild_event_create`
+        - :func:`on_guild_event_update`
+        - :func:`on_guild_event_delete`
+        - :func:`on_raw_guild_event_user_add`
+        - :func:`on_raw_guild_event_user_remove`
+        - :func:`on_guild_event_user_add`
+        - :func:`on_guild_event_user_remove`
+
+        This also corresponds to the following attributes and classes in terms of cache:
+        - :class:`GuildEvent`
+        - :attr:`Guild.events`
+        - :meth:`Guild.get_event`
+        """
+        return 1 << 16
 
 
 @fill_with_flags()

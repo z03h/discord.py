@@ -94,7 +94,9 @@ __all__ = (
     'is_owner',
     'is_nsfw',
     'has_guild_permissions',
-    'bot_has_guild_permissions'
+    'bot_has_guild_permissions',
+    'share_cooldown',
+    'share_concurrency',
 )
 
 MISSING: Any = discord.utils.MISSING
@@ -112,6 +114,7 @@ if TYPE_CHECKING:
     P = ParamSpec('P')
 else:
     P = TypeVar('P')
+
 
 def unwrap_function(function: Callable[..., Any]) -> Callable[..., Any]:
     partial = functools.partial
@@ -160,6 +163,7 @@ def wrap_callback(coro):
             raise CommandInvokeError(exc) from exc
         return ret
     return wrapped
+
 
 def hooked_wrapped_callback(command, ctx, coro):
     @functools.wraps(coro)
@@ -326,7 +330,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
             cooldown = func.__commands_cooldown__
         except AttributeError:
             cooldown = kwargs.get('cooldown')
-        
+
         if cooldown is None:
             buckets = CooldownMapping(cooldown, BucketType.default)
         elif isinstance(cooldown, CooldownMapping):
@@ -371,14 +375,14 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
     def callback(self) -> Union[
             Callable[Concatenate[CogT, Context, P], Coro[T]],
             Callable[Concatenate[Context, P], Coro[T]],
-        ]:
+    ]:
         return self._callback
 
     @callback.setter
     def callback(self, function: Union[
             Callable[Concatenate[CogT, Context, P], Coro[T]],
             Callable[Concatenate[Context, P], Coro[T]],
-        ]) -> None:
+    ]) -> None:
         self._callback = function
         unwrap = unwrap_function(function)
         self.module = unwrap.__module__
@@ -431,7 +435,9 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         of parameters in that they are passed to the :class:`Command` or
         subclass constructors, sans the name and callback.
         """
+        cog = self.cog
         self.__init__(self.callback, **dict(self.__original_kwargs__, **kwargs))
+        self.cog = cog  # reset cog back into self
 
     async def __call__(self, context: Context, *args: P.args, **kwargs: P.kwargs) -> T:
         """|coro|
@@ -1107,6 +1113,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         finally:
             ctx.command = original
 
+
 class GroupMixin(Generic[CogT]):
     """A mixin that implements common functionality for classes that behave
     similar to :class:`.Group` and are allowed to register commands.
@@ -1119,6 +1126,7 @@ class GroupMixin(Generic[CogT]):
     case_insensitive: :class:`bool`
         Whether the commands should be case insensitive. Defaults to ``False``.
     """
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         case_insensitive = kwargs.get('case_insensitive', False)
         self.all_commands: Dict[str, Command[CogT, Any, Any]] = _CaseInsensitiveDict() if case_insensitive else {}
@@ -1364,6 +1372,7 @@ class GroupMixin(Generic[CogT]):
 
         return decorator
 
+
 class Group(GroupMixin[CogT], Command[CogT, P, T]):
     """A class that implements a grouping protocol for commands to be
     executed as subcommands.
@@ -1386,6 +1395,7 @@ class Group(GroupMixin[CogT], Command[CogT, P, T]):
         Indicates if the group's commands should be case insensitive.
         Defaults to ``False``.
     """
+
     def __init__(self, *args: Any, **attrs: Any) -> None:
         self.invoke_without_command: bool = attrs.pop('invoke_without_command', False)
         super().__init__(*args, **attrs)
@@ -1474,6 +1484,7 @@ class Group(GroupMixin[CogT], Command[CogT, P, T]):
             view.previous = previous
             await super().reinvoke(ctx, call_hooks=call_hooks)
 
+
 # Decorators
 
 @overload
@@ -1491,6 +1502,7 @@ def command(
 , Command[CogT, P, T]]:
     ...
 
+
 @overload
 def command(
     name: str = ...,
@@ -1505,6 +1517,7 @@ def command(
     ]
 , CommandT]:
     ...
+
 
 def command(
     name: str = MISSING,
@@ -1553,12 +1566,13 @@ def command(
     def decorator(func: Union[
             Callable[Concatenate[ContextT, P], Coro[Any]],
             Callable[Concatenate[CogT, ContextT, P], Coro[Any]],
-        ]) -> CommandT:
+    ]) -> CommandT:
         if isinstance(func, Command):
             raise TypeError('Callback is already a command.')
         return cls(func, name=name, **attrs)
 
     return decorator
+
 
 @overload
 def group(
@@ -1575,6 +1589,7 @@ def group(
 , Group[CogT, P, T]]:
     ...
 
+
 @overload
 def group(
     name: str = ...,
@@ -1589,6 +1604,7 @@ def group(
     ]
 , GroupT]:
     ...
+
 
 def group(
     name: str = MISSING,
@@ -1613,6 +1629,7 @@ def group(
     if cls is MISSING:
         cls = Group  # type: ignore
     return command(name=name, cls=cls, **attrs)  # type: ignore
+
 
 def check(predicate: Check) -> Callable[[T], T]:
     r"""A decorator that adds a check to the :class:`.Command` or its
@@ -1706,6 +1723,7 @@ def check(predicate: Check) -> Callable[[T], T]:
 
     return decorator  # type: ignore
 
+
 def check_any(*checks: Check) -> Callable[[T], T]:
     r"""A :func:`check` that is added that checks if any of the checks passed
     will pass, i.e. using logical OR.
@@ -1774,6 +1792,7 @@ def check_any(*checks: Check) -> Callable[[T], T]:
 
     return check(predicate)
 
+
 def has_role(item: Union[int, str]) -> Callable[[T], T]:
     """A :func:`.check` that is added that checks if the member invoking the
     command has the role specified via the name or ID specified.
@@ -1806,8 +1825,12 @@ def has_role(item: Union[int, str]) -> Callable[[T], T]:
             raise NoPrivateMessage()
 
         # ctx.guild is None doesn't narrow ctx.author to Member
+        # should catch above since there can be instances of users in guild channels
+        if not isinstance(ctx.author, discord.Member):
+            raise MissingRole(item)
+
         if isinstance(item, int):
-            role = discord.utils.get(ctx.author.roles, id=item)  # type: ignore
+            role = ctx.author.get_role(item)  # type: ignore
         else:
             role = discord.utils.get(ctx.author.roles, name=item)  # type: ignore
         if role is None:
@@ -1815,6 +1838,7 @@ def has_role(item: Union[int, str]) -> Callable[[T], T]:
         return True
 
     return check(predicate)
+
 
 def has_any_role(*items: Union[int, str]) -> Callable[[T], T]:
     r"""A :func:`.check` that is added that checks if the member invoking the
@@ -1852,12 +1876,17 @@ def has_any_role(*items: Union[int, str]) -> Callable[[T], T]:
             raise NoPrivateMessage()
 
         # ctx.guild is None doesn't narrow ctx.author to Member
+        # should catch above since there can be instances of users in guild channels
+        if not isinstance(ctx.author, discord.Member):
+            raise MissingAnyRole(items)
+
         getter = functools.partial(discord.utils.get, ctx.author.roles)  # type: ignore
-        if any(getter(id=item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
+        if any(ctx.author.get_role(item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
             return True
         raise MissingAnyRole(list(items))
 
     return check(predicate)
+
 
 def bot_has_role(item: int) -> Callable[[T], T]:
     """Similar to :func:`.has_role` except checks if the bot itself has the
@@ -1879,13 +1908,14 @@ def bot_has_role(item: int) -> Callable[[T], T]:
 
         me = ctx.me
         if isinstance(item, int):
-            role = discord.utils.get(me.roles, id=item)
+            role = me.get_role(item)
         else:
             role = discord.utils.get(me.roles, name=item)
         if role is None:
             raise BotMissingRole(item)
         return True
     return check(predicate)
+
 
 def bot_has_any_role(*items: int) -> Callable[[T], T]:
     """Similar to :func:`.has_any_role` except checks if the bot itself has
@@ -1906,10 +1936,11 @@ def bot_has_any_role(*items: int) -> Callable[[T], T]:
 
         me = ctx.me
         getter = functools.partial(discord.utils.get, me.roles)
-        if any(getter(id=item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
+        if any(me.get_role(item) is not None if isinstance(item, int) else getter(name=item) is not None for item in items):
             return True
         raise BotMissingAnyRole(list(items))
     return check(predicate)
+
 
 def has_permissions(**perms: bool) -> Callable[[T], T]:
     """A :func:`.check` that is added that checks if the member has all of
@@ -1958,6 +1989,7 @@ def has_permissions(**perms: bool) -> Callable[[T], T]:
 
     return check(predicate)
 
+
 def bot_has_permissions(**perms: bool) -> Callable[[T], T]:
     """Similar to :func:`.has_permissions` except checks if the bot itself has
     the permissions listed.
@@ -1983,6 +2015,7 @@ def bot_has_permissions(**perms: bool) -> Callable[[T], T]:
         raise BotMissingPermissions(missing)
 
     return check(predicate)
+
 
 def has_guild_permissions(**perms: bool) -> Callable[[T], T]:
     """Similar to :func:`.has_permissions`, but operates on guild wide
@@ -2012,6 +2045,7 @@ def has_guild_permissions(**perms: bool) -> Callable[[T], T]:
 
     return check(predicate)
 
+
 def bot_has_guild_permissions(**perms: bool) -> Callable[[T], T]:
     """Similar to :func:`.has_guild_permissions`, but checks the bot
     members guild permissions.
@@ -2037,6 +2071,7 @@ def bot_has_guild_permissions(**perms: bool) -> Callable[[T], T]:
 
     return check(predicate)
 
+
 def dm_only() -> Callable[[T], T]:
     """A :func:`.check` that indicates this command must only be used in a
     DM context. Only private messages are allowed when
@@ -2055,6 +2090,7 @@ def dm_only() -> Callable[[T], T]:
 
     return check(predicate)
 
+
 def guild_only() -> Callable[[T], T]:
     """A :func:`.check` that indicates this command must only be used in a
     guild context only. Basically, no private messages are allowed when
@@ -2070,6 +2106,7 @@ def guild_only() -> Callable[[T], T]:
         return True
 
     return check(predicate)
+
 
 def is_owner() -> Callable[[T], T]:
     """A :func:`.check` that checks if the person invoking this command is the
@@ -2088,6 +2125,7 @@ def is_owner() -> Callable[[T], T]:
 
     return check(predicate)
 
+
 def is_nsfw() -> Callable[[T], T]:
     """A :func:`.check` that checks if the channel is a NSFW channel.
 
@@ -2105,6 +2143,7 @@ def is_nsfw() -> Callable[[T], T]:
             return True
         raise NSFWChannelRequired(ch)  # type: ignore
     return check(pred)
+
 
 def cooldown(rate: int, per: float, type: Union[BucketType, Callable[[Message], Any]] = BucketType.default) -> Callable[[T], T]:
     """A decorator that adds a cooldown to a :class:`.Command`
@@ -2140,6 +2179,7 @@ def cooldown(rate: int, per: float, type: Union[BucketType, Callable[[Message], 
             func.__commands_cooldown__ = CooldownMapping(Cooldown(rate, per), type)
         return func
     return decorator  # type: ignore
+
 
 def dynamic_cooldown(cooldown: Union[BucketType, Callable[[Message], Any]], type: BucketType = BucketType.default) -> Callable[[T], T]:
     """A decorator that adds a dynamic cooldown to a :class:`.Command`
@@ -2181,6 +2221,7 @@ def dynamic_cooldown(cooldown: Union[BucketType, Callable[[Message], Any]], type
         return func
     return decorator  # type: ignore
 
+
 def max_concurrency(number: int, per: BucketType = BucketType.default, *, wait: bool = False) -> Callable[[T], T]:
     """A decorator that adds a maximum concurrency to a :class:`.Command` or its subclasses.
 
@@ -2213,6 +2254,7 @@ def max_concurrency(number: int, per: BucketType = BucketType.default, *, wait: 
             func.__commands_max_concurrency__ = value
         return func
     return decorator  # type: ignore
+
 
 def before_invoke(coro) -> Callable[[T], T]:
     """A decorator that registers a coroutine as a pre-invoke hook.
@@ -2260,6 +2302,7 @@ def before_invoke(coro) -> Callable[[T], T]:
         return func
     return decorator  # type: ignore
 
+
 def after_invoke(coro) -> Callable[[T], T]:
     """A decorator that registers a coroutine as a post-invoke hook.
 
@@ -2275,3 +2318,27 @@ def after_invoke(coro) -> Callable[[T], T]:
             func.__after_invoke__ = coro
         return func
     return decorator  # type: ignore
+
+
+def share_cooldown(command):
+    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+        if command._buckets:
+            if isinstance(func, Command):
+                func._buckets = command._buckets
+            else:
+                func.__commands_cooldown__ = command._buckets
+        return func
+
+    return decorator
+
+
+def share_concurrency(command):
+    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+        if command._max_concurrency:
+            if isinstance(func, Command):
+                func._max_concurrency = command._max_concurrency
+            else:
+                func.__commands_max_concurrency__ = command._max_concurrency
+        return func
+
+    return decorator

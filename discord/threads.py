@@ -92,6 +92,13 @@ class Thread(Messageable, Hashable):
         The parent :class:`TextChannel` ID this thread belongs to.
     owner_id: :class:`int`
         The user's ID that created this thread.
+    created_at: Optional[:class:`datetime.datetime`]
+        When the thread was created.
+
+        .. note::
+
+            Only available for threads created after 9 January 2022.
+
     last_message_id: Optional[:class:`int`]
         The last message ID of the message sent to this thread. It may
         *not* point to an existing or valid message.
@@ -114,8 +121,6 @@ class Thread(Messageable, Hashable):
     invitable: :class:`bool`
         Whether non-moderators can add other non-moderators to this thread.
         This is always ``True`` for public threads.
-    archiver_id: Optional[:class:`int`]
-        The user's ID that archived this thread.
     auto_archive_duration: :class:`int`
         The duration in minutes until the thread is automatically archived due to inactivity.
         Usually a value of 60, 1440, 4320 and 10080.
@@ -140,9 +145,9 @@ class Thread(Messageable, Hashable):
         'locked',
         'archived',
         'invitable',
-        'archiver_id',
         'auto_archive_duration',
         'archive_timestamp',
+        'created_at'
     )
 
     def __init__(self, *, guild: Guild, state: ConnectionState, data: ThreadPayload):
@@ -184,11 +189,11 @@ class Thread(Messageable, Hashable):
 
     def _unroll_metadata(self, data: ThreadMetadata):
         self.archived = data['archived']
-        self.archiver_id = _get_as_snowflake(data, 'archiver_id')
         self.auto_archive_duration = data['auto_archive_duration']
         self.archive_timestamp = parse_time(data['archive_timestamp'])
         self.locked = data.get('locked', False)
         self.invitable = data.get('invitable', True)
+        self.created_at = parse_time(data.get('create_timestamp'))
 
     def _update(self, data):
         try:
@@ -529,6 +534,7 @@ class Thread(Messageable, Hashable):
         invitable: bool = MISSING,
         slowmode_delay: int = MISSING,
         auto_archive_duration: ThreadArchiveDuration = MISSING,
+        reason: Optional[str] = None,
     ) -> Thread:
         """|coro|
 
@@ -558,6 +564,9 @@ class Thread(Messageable, Hashable):
         slowmode_delay: :class:`int`
             Specifies the slowmode rate limit for user in this thread, in seconds.
             A value of ``0`` disables slowmode. The maximum value possible is ``21600``.
+        reason: Optional[:class:`str`]
+            The reason for editing this thread.
+            Shows up on the audit log.
 
         Raises
         -------
@@ -584,6 +593,8 @@ class Thread(Messageable, Hashable):
             payload['invitable'] = invitable
         if slowmode_delay is not MISSING:
             payload['rate_limit_per_user'] = slowmode_delay
+
+        payload['reason'] = reason
 
         data = await self._state.http.edit_channel(self.id, **payload)
         # The data payload will always be a Thread payload
@@ -707,12 +718,18 @@ class Thread(Messageable, Hashable):
         members = await self._state.http.get_thread_members(self.id)
         return [ThreadMember(parent=self, data=data) for data in members]
 
-    async def delete(self):
+    async def delete(self, *, reason: Optional[str] = None):
         """|coro|
 
         Deletes this thread.
 
         You must have :attr:`~Permissions.manage_threads` to delete threads.
+
+        Parameters
+        -----------
+        reason: Optional[:class:`str`]
+            The reason for deleting this thread.
+            Shows up on the audit log.
 
         Raises
         -------
@@ -721,7 +738,7 @@ class Thread(Messageable, Hashable):
         HTTPException
             Deleting the thread failed.
         """
-        await self._state.http.delete_channel(self.id)
+        await self._state.http.delete_channel(self.id, reason=reason)
 
     def get_partial_message(self, message_id: int, /) -> PartialMessage:
         """Creates a :class:`PartialMessage` from the message ID.

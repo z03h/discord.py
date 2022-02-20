@@ -71,6 +71,7 @@ __all__ = (
     'EmojiNotFound',
     'GuildStickerNotFound',
     'PartialEmojiConversionFailure',
+    'GuildEventNotFound',
     'BadBoolArgument',
     'MissingRole',
     'BotMissingRole',
@@ -460,9 +461,29 @@ class GuildStickerNotFound(BadArgument):
     argument: :class:`str`
         The sticker supplied by the caller that was not found
     """
+
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
         super().__init__(f'Sticker "{argument}" not found.')
+
+
+class GuildEventNotFound(BadArgument):
+    """Exception raised when the bot can not find the event.
+
+    This inherits from :exc:`BadArgument`
+
+    .. versionadded:: 2.0
+
+    Attributes
+    -----------
+    argument: :class:`str`
+        The event supplied by the caller that was not found
+    """
+
+    def __init__(self, argument: str) -> None:
+        self.argument: str = argument
+        super().__init__(f'Event "{argument}" not found.')
+
 
 class BadBoolArgument(BadArgument):
     """Exception raised when a boolean argument was not convertable.

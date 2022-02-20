@@ -1094,6 +1094,83 @@ to handle it, which defaults to print a traceback and ignoring the exception.
     :param user: The user that joined or left.
     :type user: :class:`User`
 
+.. function:: on_guild_event_create(event)
+
+    Called when an :class:`GuildEvent` is created.
+
+    This requires :attr:`Intents.guild_events` to be enabled.
+
+    :param event: The newly created event.
+    :type event: :class:`GuildEvent`
+
+.. function:: on_guild_event_update(before, after)
+
+    Called when an event is updated.
+
+    This requires :attr:`Intents.guild_events` to be enabled.
+
+    :param before: The old event.
+    :type before: :class:`GuildEvent`
+    :param after: The updated event.
+    :type after: :class:`GuildEvent`
+
+.. function:: on_guild_event_delete(event)
+
+    Called when an event is deleted.
+
+    This requires :attr:`Intents.guild_events` to be enabled.
+
+    :param event: The deleted  event.
+    :type event: :class:`GuildEvent`
+
+.. function:: on_guild_event_user_add(event, member)
+
+    Called when a user subscribes to an event. If the member or event
+    is not found in the internal cache, then this event will not be
+    called. Consider using :func:`on_raw_guild_event_user_add` instead.
+
+    This requires :attr:`Intents.guild_events` to be enabled.
+
+    :param event: The event subscribed to.
+    :type event: :class:`GuildEvent`
+    :param member: The member who subscribed.
+    :type member: :class:`Member`
+
+.. function:: on_raw_guild_event_user_add(payload)
+
+    Called when a user subscribes to an event. Unlike
+    :meth:`on_guild_event_user_add`, this will be called
+    regardless of the state of the internal cache.
+
+    This requires :attr:`Intents.guild_events` to be enabled.
+
+    :param payload: The raw event payload data.
+    :type payload: :class:`RawGuildEventSubscription`
+
+.. function:: on_guild_event_user_remove(event, member)
+
+    Called when a user unsubscribes to an event. If the member or event is
+    not found in the internal cache, then this event will not be called.
+    Consider using :func:`on_raw_guild_event_user_remove` instead.
+
+    This requires :attr:`Intents.guild_events` to be enabled.
+
+    :param event: The event unsubscribed from.
+    :type event: :class:`GuildEvent`
+    :param member: The member who unsubscribed.
+    :type member: :class:`Member`
+
+.. function:: on_raw_guild_event_user_remove(payload)
+
+    Called when a user unsubscribes to an event. Unlike
+    :meth:`on_guild_event_user_remove`, this will be called
+    regardless of the state of the internal cache.
+
+    This requires :attr:`Intents.guild_events` to be enabled.
+
+    :param payload: The raw event payload data.
+    :type payload: :class:`RawGuildEventSubscription`
+
 .. _discord-api-utils:
 
 Utility Functions
@@ -2338,6 +2415,30 @@ of :class:`enum.Enum`.
 
         .. versionadded:: 2.0
 
+    .. attribute:: guild_event_create
+
+        A guild event was created.
+
+        When this is the action, the type of :attr:`~AuditLogEntry.target` is
+        the :class:`GuildEvent` or :class:`Object` with the ID of the event which
+        was created.
+
+    .. attribute:: guild_event_update
+
+        A guild event was updated.
+
+        When this is the action, the type of :attr:`~AuditLogEntry.target` is
+        the :class:`GuildEvent` or :class:`Object` with the ID of the event which
+        was updated.
+
+    .. attribute:: guild_event_delete
+
+        A guild event was deleted.
+
+        When this is the action, the type of :attr:`~AuditLogEntry.target` is
+        the :class:`GuildEvent` or :class:`Object` with the ID of the event which
+        was deleted.
+
     .. attribute:: thread_create
 
         A thread was created.
@@ -2611,6 +2712,58 @@ of :class:`enum.Enum`.
     .. attribute:: age_restricted
 
         The guild may contain NSFW content.
+
+.. class:: GuildEventStatus
+
+    Represents the status of a guild event.
+
+    .. verssionadded:: 2.0
+
+    .. attribute:: guild
+
+        The guild event hasn't started or been canceled yet.
+
+    .. attribute:: active
+
+        The guild event is in progress.
+
+    .. attribute:: completed
+
+        The guild event is over.
+
+    .. attribute:: canceled
+
+        The guild event has been canceled before it can start.
+
+    .. attribute:: cancelled
+
+        Alias to :attr:`canceled`.
+
+.. class:: GuildEventLocationType
+
+    Represents a guild event location type.
+
+    .. verssionadded:: 2.0
+
+    .. attribute:: stage_instance
+
+        Represents a guild event that is happening in a :class:`StageChannel`.
+
+    .. attribute:: voice
+
+        Represents a guild event that is happening in a :class:`VoiceChannel`.
+
+    .. attribute:: external
+
+        Represents a generic location as a :class:`str`.
+
+.. class:: GuildEventPrivacyLevel
+
+    Represents the privacy level of a guild event.
+
+    .. attribute:: guild_only
+
+        Represents a guild event that is only available to members inside the guild.
 
 Async Iterator
 ----------------
@@ -3531,6 +3684,25 @@ Guild
 
         :type: :class:`User`
 
+GuildPreview
+~~~~~~~~~~~~~
+
+.. attributetable:: GuildPreview
+
+.. autoclass:: GuildPreview()
+    :members:
+
+GuildEvent
+~~~~~~~~~~~
+
+.. attributestable:: GuildEvent
+
+.. autoclass:: GuildEvent()
+    :members:
+    :exclude-members: users
+
+    .. automethod:: users
+        :async-for:
 
 Integration
 ~~~~~~~~~~~~
@@ -3975,11 +4147,19 @@ PartialWebhookGuild
     :members:
 
 PartialWebhookChannel
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 
 .. attributetable:: PartialWebhookChannel
 
 .. autoclass:: PartialWebhookChannel()
+    :members:
+
+RawGuildEventMemberEvent
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. attributeable:: RawGuildEventMemberEvent
+
+.. autoclass:: RawGuildEventMemberEvent()
     :members:
 
 .. _discord_api_data:

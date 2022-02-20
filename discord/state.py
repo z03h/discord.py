@@ -50,7 +50,7 @@ from .channel import _channel_factory
 from .raw_models import *
 from .member import Member
 from .role import Role
-from .enums import ChannelType, try_enum, Status
+from .enums import ChannelType, try_enum, Status, GuildEventStatus
 from .flags import ApplicationFlags, Intents, MemberCacheFlags
 from .object import Object
 from .invite import Invite
@@ -60,16 +60,21 @@ from .ui.view import ViewStore, View
 from .stage_instance import StageInstance
 from .threads import Thread, ThreadMember
 from .sticker import GuildSticker
+from  .guild_events import GuildEvent
 
 if TYPE_CHECKING:
     from .abc import PrivateChannel
-    from .application_commands import ApplicationCommandMeta as NativeApplicationCommand, ApplicationCommandOption as NativeCommandOption
+    from .application_commands import (
+        ApplicationCommandMeta as NativeApplicationCommand,
+        ApplicationCommandOption as NativeCommandOption
+    )
     from .message import MessageableChannel
     from .guild import GuildChannel, VocalGuildChannel
     from .http import HTTPClient
     from .voice_client import VoiceProtocol
     from .client import Client
     from .gateway import DiscordWebSocket
+    from .enums import ApplicationCommandType
 
     from .types.activity import Activity as ActivityPayload
     from .types.channel import DMChannel as DMChannelPayload
@@ -231,11 +236,11 @@ class ConnectionState:
         self._status: Optional[str] = status
         self._intents: Intents = intents
 
-        self._queued_global_application_commands: Dict[str, NativeApplicationCommand] = {}
-        self._queued_guild_application_commands: Dict[int, Dict[str, NativeApplicationCommand]] = defaultdict(dict)
+        self._queued_global_application_commands: Dict[Tuple(str, ApplicationCommandType), NativeApplicationCommand] = {}
+        self._queued_guild_application_commands: Dict[int, Dict[Tuple(str, ApplicationCommandType), NativeApplicationCommand]] = defaultdict(dict)
 
         self.cached_application_commands: Dict[int, ApplicationCommand] = {}
-        self.cached_application_commands_by_name: Dict[Tuple[str, Optional[int]], ApplicationCommand] = {}
+        self.cached_application_commands_by_name: Dict[Tuple[str, ApplicationCommandType, Optional[int]], ApplicationCommand] = {}
 
         if not intents.members or cache_flags._empty:
             self.store_user = self.create_user  # type: ignore
@@ -499,7 +504,7 @@ class ConnectionState:
     def add_application_command(self, data: ApplicationCommandPayload) -> ApplicationCommand:
         command = ApplicationCommand(data=data, state=self)
         self.cached_application_commands[command.id] = command
-        self.cached_application_commands_by_name[command.name, command.guild_id] = command
+        self.cached_application_commands_by_name[command.name, command.type, command.guild_id] = command
         return command
 
     async def chunker(
@@ -529,7 +534,8 @@ class ConnectionState:
 
     def _is_application_command_match(self, native: NativeApplicationCommand, guild_id: int = None) -> bool:
         try:
-            stored = self.cached_application_commands_by_name[native.__application_command_name__, guild_id]
+            key = (native.__application_command_name__, native.__application_command_type__, guild_id)
+            stored = self.cached_application_commands_by_name[key]
         except KeyError:
             return False
 
@@ -542,37 +548,49 @@ class ConnectionState:
             if not command.__application_command_parent__
         ]
         if not payload:
-            return
-
-        response = await self.http.bulk_upsert_global_commands(self.self_id or self.application_id, payload)
-
-        for data in response:
-            command = self.add_application_command(data)
-            native_command = self._queued_global_application_commands[command.name]
-            self._application_commands_store.store_command(command.id, native_command)
+            return []
+        queue_copy = self._queued_global_application_commands.copy()
 
         self._queued_global_application_commands = {}
+        response = await self.http.bulk_upsert_global_commands(self.self_id or self.application_id, payload)
+
+        commands = []
+        for data in response:
+            command = self.add_application_command(data)
+            commands.append(command)
+            native_command = queue_copy[command.name, command.type]
+            self._application_commands_store.store_command(command.id, native_command)
+
+        return commands
 
     async def update_guild_application_commands(self, guild_id: int) -> None:
         queue = self._queued_guild_application_commands[guild_id]
 
         payload = [command.to_dict() for command in queue.values() if not command.__application_command_parent__]
         if not payload:
-            return
-
+            return []
+        queue_copy = queue.copy()
+        queue.clear()
         response = await self.http.bulk_upsert_guild_commands(self.self_id or self.application_id, guild_id, payload)
 
+        commands = []
         for data in response:
             command = self.add_application_command(data)
-            self._application_commands_store.store_command(command.id, queue[command.name])
-
-        queue.clear()
+            commands.append(command)
+            self._application_commands_store.store_command(command.id, queue_copy[command.name, command.type])
+        return commands
 
     async def update_application_commands(self) -> None:
+        commands = {}
         for guild_id, value in self._queued_guild_application_commands.items():
-            await self.update_guild_application_commands(guild_id)
+            guild_cmds = await self.update_guild_application_commands(guild_id)
+            if guild_cmds:
+                commands[guild_id] = guild_cmds
 
-        await self.update_global_application_commands()
+        global_cmds = await self.update_global_application_commands()
+        if global_cmds:
+            commands[None] = global_cmds
+        return commands
 
     def store_modal(self, modal: Modal) -> None:
         self._modal_store.add_modal(modal)
@@ -1119,6 +1137,75 @@ class ConnectionState:
         # guild won't be None here
         guild.stickers = tuple(map(lambda d: self.store_sticker(guild, d), data['stickers']))  # type: ignore
         self.dispatch('guild_stickers_update', guild, before_stickers, guild.stickers)
+
+    def parse_guild_scheduled_event_create(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_CREATE referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        event = GuildEvent(state=self, guild=guild, data=data)
+        guild._add_event(event)
+        self.dispatch('guild_event_create', event)
+
+    def parse_guild_scheduled_event_update(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_UPDATE referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        event = guild.get_event(int(data['id']))
+        if event is not None:
+            old_event = copy.copy(event)
+            event._update(guild, data, self)
+            self.dispatch('guild_event_update', old_event, event)
+        else:
+            event = GuildEvent(state=self, guild=guild, data=data)
+            guild._add_event(event)
+
+    def parse_guild_scheduled_event_delete(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_DELETE referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        event = guild.get_event(int(data['id']))
+        if event is not None:
+            guild._remove_event(event)
+            event.status = GuildEventStatus.canceled
+        else:
+            event = GuildEvent(state=self, guild=guild, data=data)
+        self.dispatch('guild_event_delete', event)
+
+    def parse_guild_scheduled_event_user_add(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_USER_ADD referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        payload = RawGuildEventMemberEvent(data, 'USER_ADD')
+        self.dispatch('raw_guild_event_user_add', payload)
+
+        member = guild.get_member(payload.user_id)
+        if member is not None:
+            event = guild.get_event(int(data['guild_scheduled_event_id']))
+            if event is not None:
+                self.dispatch('guild_event_user_add', event, member)
+
+    def parse_guild_scheduled_event_user_remove(self, data) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is None:
+            _log.debug('GUILD_SCHEDULED_EVENTS_USER_ADD referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
+            return
+
+        payload = RawGuildEventMemberEvent(data, 'USER_REMOVE')
+        self.dispatch('raw_guild_event_user_add', payload)
+
+        member = guild.get_member(payload.user_id)
+        if member is not None:
+            event = guild.get_event(int(data['guild_scheduled_event_id']))
+            if event is not None:
+                self.dispatch('guild_event_user_add', event, member)
 
     def _get_create_guild(self, data):
         if data.get('unavailable') is False:

@@ -91,6 +91,7 @@ if TYPE_CHECKING:
         welcome_screen,
         threads,
         sticker,
+        guild_events
     )
     from .types.snowflake import Snowflake, SnowflakeList
 
@@ -115,7 +116,7 @@ async def json_or_text(response: aiohttp.ClientResponse) -> Union[Dict[str, Any]
 
 
 class Route:
-    BASE: ClassVar[str] = 'https://discord.com/api/v8'
+    BASE: ClassVar[str] = 'https://discord.com/api/v9'
 
     def __init__(self, method: str, path: str, **parameters: Any) -> None:
         self.path: str = path
@@ -187,7 +188,7 @@ class HTTPClient:
         self.proxy_auth: Optional[aiohttp.BasicAuth] = proxy_auth
         self.use_clock: bool = not unsync_clock
 
-        user_agent = 'DiscordBot (https://github.com/Rapptz/discord.py {0}) Python/{1[0]}.{1[1]} aiohttp/{2}'
+        user_agent = 'DiscordBot (https://github.com/jay3332/discord.py {0}) Python/{1[0]}.{1[1]} aiohttp/{2}'
         self.user_agent: str = user_agent.format(__version__, sys.version_info, aiohttp.__version__)
 
     def recreate(self) -> None:
@@ -552,6 +553,41 @@ class HTTPClient:
         r = Route('PATCH', '/channels/{channel_id}/messages/{message_id}', channel_id=channel_id, message_id=message_id)
         return self.request(r, json=fields)
 
+    def edit_files(
+        self,
+        channel_id: Snowflake,
+        message_id: Snowflake,
+        *,
+        files: Sequence[File],
+        content: Optional[str] = MISSING,
+        embeds: Optional[Iterable[Optional[embed.Embed]]] = None,
+        attachments: Optional[Iterable[message.Attachment]] = None,
+        allowed_mentions: Optional[message.AllowedMentions] = None,
+        components: Optional[List[components.Component]] = None,
+    ) -> Response[message.Message]:
+        route = Route('PATCH', '/channels/{channel_id}/messages/{message_id}', channel_id=channel_id, message_id=message_id)
+
+        payload: Dict[str, Any] = {}
+
+        if content is not MISSING:
+            payload['content'] = content
+
+        if embeds is not None:
+            payload['embeds'] = embeds
+
+        if allowed_mentions is not None:
+            payload['allowed_mentions'] = allowed_mentions
+
+        if attachments is not None:
+            payload['attachments'] = attachments
+
+        if components is not None:
+            payload['components'] = components
+
+        form = utils.resolve_multipart(payload, files)
+
+        return self.request(route, form=form, files=files)
+
     def add_reaction(self, channel_id: Snowflake, message_id: Snowflake, emoji: str) -> Response[None]:
         r = Route(
             'PUT',
@@ -873,11 +909,13 @@ class HTTPClient:
         *,
         name: str,
         auto_archive_duration: threads.ThreadArchiveDuration,
+        slowmode_delay: int,
         reason: Optional[str] = None,
     ) -> Response[threads.Thread]:
         payload = {
             'name': name,
             'auto_archive_duration': auto_archive_duration,
+            'rate_limit_per_user': slowmode_delay,
         }
 
         route = Route(
@@ -893,6 +931,7 @@ class HTTPClient:
         auto_archive_duration: threads.ThreadArchiveDuration,
         type: threads.ThreadType,
         invitable: bool = True,
+        slowmode_delay: int,
         reason: Optional[str] = None,
     ) -> Response[threads.Thread]:
         payload = {
@@ -900,6 +939,7 @@ class HTTPClient:
             'auto_archive_duration': auto_archive_duration,
             'type': type,
             'invitable': invitable,
+            'rate_limit_per_user': slowmode_delay,
         }
 
         route = Route('POST', '/channels/{channel_id}/threads', channel_id=channel_id)
@@ -1027,16 +1067,15 @@ class HTTPClient:
     def leave_guild(self, guild_id: Snowflake) -> Response[None]:
         return self.request(Route('DELETE', '/users/@me/guilds/{guild_id}', guild_id=guild_id))
 
-    def get_guild(self, guild_id: Snowflake) -> Response[guild.Guild]:
-        return self.request(Route('GET', '/guilds/{guild_id}', guild_id=guild_id))
+    def get_guild(self, guild_id: Snowflake, with_counts: bool) -> Response[guild.Guild]:
+        return self.request(Route('GET', '/guilds/{guild_id}', guild_id=guild_id), params={'with_counts': with_counts})
 
     def delete_guild(self, guild_id: Snowflake) -> Response[None]:
         return self.request(Route('DELETE', '/guilds/{guild_id}', guild_id=guild_id))
 
-    def create_guild(self, name: str, region: str, icon: Optional[str]) -> Response[guild.Guild]:
+    def create_guild(self, name: str, icon: Optional[str]) -> Response[guild.Guild]:
         payload = {
             'name': name,
-            'region': region,
         }
         if icon:
             payload['icon'] = icon
@@ -1070,6 +1109,9 @@ class HTTPClient:
 
         return self.request(Route('PATCH', '/guilds/{guild_id}', guild_id=guild_id), json=payload, reason=reason)
 
+    def get_guild_preview(self, guild_id: Snowlfake):
+        return self.request(Route('GET', '/guilds/{guild_id}/preview', guild_id=guild_id))
+
     def get_template(self, code: str) -> Response[template.Template]:
         return self.request(Route('GET', '/guilds/templates/{code}', code=code))
 
@@ -1095,10 +1137,9 @@ class HTTPClient:
     def delete_template(self, guild_id: Snowflake, code: str) -> Response[None]:
         return self.request(Route('DELETE', '/guilds/{guild_id}/templates/{code}', guild_id=guild_id, code=code))
 
-    def create_from_template(self, code: str, name: str, region: str, icon: Optional[str]) -> Response[guild.Guild]:
+    def create_from_template(self, code: str, name: str, icon: Optional[str]) -> Response[guild.Guild]:
         payload = {
             'name': name,
-            'region': region,
         }
         if icon:
             payload['icon'] = icon
@@ -1377,12 +1418,20 @@ class HTTPClient:
         return self.request(r, reason=reason, json=payload)
 
     def get_invite(
-        self, invite_id: str, *, with_counts: bool = True, with_expiration: bool = True
+        self,
+        invite_id: str,
+        *,
+        with_counts: bool = True,
+        with_expiration: bool = True,
+        event_id: Snowflake = None
     ) -> Response[invite.Invite]:
         params = {
             'with_counts': int(with_counts),
             'with_expiration': int(with_expiration),
         }
+        if event_id:
+            params['guild_scheduled_event_id'] = int(event_id)
+
         return self.request(Route('GET', '/invites/{invite_id}', invite_id=invite_id), params=params)
 
     def invites_from(self, guild_id: Snowflake) -> Response[List[invite.Invite]]:
@@ -1403,7 +1452,7 @@ class HTTPClient:
         self, guild_id: Snowflake, role_id: Snowflake, *, reason: Optional[str] = None, **fields: Any
     ) -> Response[role.Role]:
         r = Route('PATCH', '/guilds/{guild_id}/roles/{role_id}', guild_id=guild_id, role_id=role_id)
-        valid_keys = ('name', 'permissions', 'color', 'hoist', 'mentionable')
+        valid_keys = ('name', 'permissions', 'color', 'hoist', 'mentionable', 'icon', 'unicode_emoji')
         payload = {k: v for k, v in fields.items() if k in valid_keys}
         return self.request(r, json=payload, reason=reason)
 
@@ -1891,6 +1940,96 @@ class HTTPClient:
             guild_id=guild_id,
         )
         return self.request(r, json=payload)
+
+    # Guild Scheduled Events
+
+    def get_guild_events(self, guild_id: Snowflake, *, with_user_count: bool = False) -> Response[List[guild_events.GuildEvent]]:
+        r = Route('GET', '/guilds/{guild_id}/scheduled-events', guild_id=guild_id)
+        return self.request(r, params={'with_user_count': int(with_user_count)})
+
+    def get_guild_event(self, guild_id: Snowflake, event_id: Snowflake, *, with_user_count: bool = False) -> Response[guild_events.GuildEvent]:
+        r = Route('GET', '/guilds/{guild_id}/scheduled-events/{event_id}', guild_id=guild_id, event_id=event_id)
+        return self.request(r, params={'with_user_count': int(with_user_count)})
+
+    def create_guild_event(
+        self,
+        guild_id: Snowflake,
+        *,
+        reason: Optional[str] = None,
+        **payload,
+    ) -> Response[guild_events.GuildEvent]:
+        r = Route('POST', '/guilds/{guild_id}/scheduled-events', guild_id=guild_id)
+        valid_keys = (
+            'channel_id',
+            'name',
+            'privacy_level',
+            'scheduled_start_time',
+            'scheduled_end_time',
+            'description',
+            'entity_type',
+            'status',
+            'entity_metadata',
+            'image',
+        )
+        payload = {k: v for k, v in payload.items() if k in valid_keys}
+
+        return self.request(r, json=payload, reason=reason)
+
+    def edit_guild_event(
+        self,
+        guild_id: Snowflake,
+        event_id: Snowflake,
+        reason: Optional[str] = None,
+        **payload: Any
+    ) -> Response[guild_events.GuildEvent]:
+        valid_keys = (
+            'channel_id',
+            'name',
+            'privacy_level',
+            'scheduled_start_time',
+            'scheduled_end_time',
+            'description',
+            'entity_type',
+            'status',
+            'entity_metadata',
+            'image',
+        )
+        payload = {k: v for k, v in payload.items() if k in valid_keys}
+        r = Route('PATCH', '/guilds/{guild_id}/scheduled-events/{event_id}', guild_id=guild_id, event_id=event_id)
+        return self.request(r, json=payload, reason=reason)
+
+    def delete_guild_event(
+        self,
+        guild_id: Snowflake,
+        event_id: Snowflake,
+        reason: Optional[str] = None,
+    ) -> Response[None]:
+        r = Route('DELETE', '/guilds/{guild_id}/scheduled-events/{event_id}', guild_id=guild_id, event_id=event_id)
+        return self.request(r, reason=reason)
+
+    def get_guild_event_users(
+        self,
+        guild_id: Snowflake,
+        event_id: Snowflake,
+        *,
+        limit: int,
+        before: Optional[Snowflake] = None,
+        after: Optional[Snowflake] = None,
+        with_member: Optional[bool] = None
+    ) -> Response[List[guild_events.GuildEventUser]]:
+        params: Dict[str, Any] = {
+            'limit': int(limit),
+        }
+
+        if before is not None:
+            params['before'] = int(before)
+        if after is not None:
+            params['after'] = int(after)
+        if with_member is not None:
+            params['with_member'] = int(with_member)
+
+        r = Route('GET', '/guilds/{guild_id}/scheduled-events/{event_id}/users', guild_id=guild_id, event_id=event_id)
+        return self.request(r, params=params)
 
     # Misc
 

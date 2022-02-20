@@ -32,6 +32,7 @@ __all__ = (
     'PermissionOverwrite',
 )
 
+
 # A permission alias works like a regular flag but is marked
 # So the PermissionOverwrite knows to work with it
 class permission_alias(alias_flag_value):
@@ -46,7 +47,9 @@ def make_permission_alias(alias: str) -> Callable[[Callable[[Any], int]], permis
 
     return decorator
 
+
 P = TypeVar('P', bound='Permissions')
+
 
 @fill_with_flags()
 class Permissions(BaseFlags):
@@ -147,7 +150,7 @@ class Permissions(BaseFlags):
         """A factory method that creates a :class:`Permissions` with all
         permissions set to ``True``.
         """
-        return cls(0b111111111111111111111111111111111111111)
+        return cls(0b11111111111111111111111111111111111111111)
 
     @classmethod
     def all_channel(cls: Type[P]) -> P:
@@ -195,7 +198,7 @@ class Permissions(BaseFlags):
 
         .. versionadded:: 1.7
         """
-        return cls(0b00001100000000000000000000000111)
+        return cls(0b10000000000001100000000000000000000000111)
 
     @classmethod
     def text(cls: Type[P]) -> P:
@@ -216,7 +219,7 @@ class Permissions(BaseFlags):
     def voice(cls: Type[P]) -> P:
         """A factory method that creates a :class:`Permissions` with all
         "Voice" permissions from the official Discord UI set to ``True``."""
-        return cls(0b00000011111100000000001100000000)
+        return cls(0b1000000000000011111100000000001100000000)
 
     @classmethod
     def stage(cls: Type[P]) -> P:
@@ -332,15 +335,22 @@ class Permissions(BaseFlags):
         return 1 << 9
 
     @flag_value
-    def read_messages(self) -> int:
-        """:class:`bool`: Returns ``True`` if a user can read messages from all or specific text channels."""
+    def view_channel(self) -> int:
+        """:class:`bool`: Returns ``True`` if a user can read messages from all or specific text channels.
+
+        .. versionchanged:: 2.0
+            No longer an alias for :attr:`read_messages`.
+        """
         return 1 << 10
 
-    @make_permission_alias('read_messages')
-    def view_channel(self) -> int:
-        """:class:`bool`: An alias for :attr:`read_messages`.
+    @make_permission_alias('view_channel')
+    def read_messages(self) -> int:
+        """:class:`bool`: An alias for :attr:`view_channel`.
 
         .. versionadded:: 1.3
+
+        .. versionchanged:: 2.0
+            Is now an alias for :attr:`view_channel`.
         """
         return 1 << 10
 
@@ -551,7 +561,25 @@ class Permissions(BaseFlags):
         """
         return 1 << 38
 
+    @flag_value
+    def start_embedded_activities(self) -> int:
+        """:class:`bool`: Returns ``True`` if a user can start embedded activities.
+
+        .. versionadded:: 2.0
+        """
+        return 1 << 39
+
+    @flag_value
+    def moderate_members(self) -> int:
+        """:class:`bool`: Returns ``True`` if a user can timeout other users.
+
+        .. versionadded:: 2.0
+        """
+        return 1 << 40
+
+
 PO = TypeVar('PO', bound='PermissionOverwrite')
+
 
 def _augment_from_permissions(cls):
     cls.VALID_NAMES = set(Permissions.VALID_FLAGS)
@@ -664,6 +692,7 @@ class PermissionOverwrite:
         send_messages_in_threads: Optional[bool]
         external_stickers: Optional[bool]
         use_external_stickers: Optional[bool]
+        start_embedded_activities: Optional[bool]
 
     def __init__(self, **kwargs: Optional[bool]):
         self._values: Dict[str, Optional[bool]] = {}

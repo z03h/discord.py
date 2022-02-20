@@ -35,7 +35,7 @@ import discord.abc
 
 from . import utils
 from .asset import Asset
-from .utils import MISSING
+from .utils import MISSING, utcnow
 from .user import BaseUser, User, _UserTag
 from .activity import create_activity, ActivityTypes
 from .permissions import Permissions
@@ -261,6 +261,7 @@ class Member(discord.abc.Messageable, _UserTag):
         'guild',
         'pending',
         'nick',
+        '_timeout',
         '_client_status',
         '_user',
         '_state',
@@ -296,6 +297,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self.nick: Optional[str] = data.get('nick', None)
         self.pending: bool = data.get('pending', False)
         self._avatar: Optional[str] = data.get('avatar')
+        self._timeout = utils.parse_time(data.get('communication_disabled_until'))
 
     def __str__(self) -> str:
         return str(self._user)
@@ -353,6 +355,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self.activities = member.activities
         self._state = member._state
         self._avatar = member._avatar
+        self._timeout = member._timeout
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below
@@ -375,7 +378,10 @@ class Member(discord.abc.Messageable, _UserTag):
             self.pending = data['pending']
         except KeyError:
             pass
-
+        try:
+            self._timeout = utils.parse_time(data['communication_disabled_until'])
+        except KeyError:
+            pass
         self.premium_since = utils.parse_time(data.get('premium_since'))
         self._roles = utils.SnowflakeList(map(int, data['roles']))
         self._avatar = data.get('avatar')
@@ -544,6 +550,28 @@ class Member(discord.abc.Messageable, _UserTag):
         if self.activities:
             return self.activities[0]
 
+    @property
+    def timeout(self) -> Optional[datetime.datetime]:
+        """Optional[:class:`datetime.timedelta`]: When the user is in timeout until.
+        Can be ``None`` if user is not timed out.
+        """
+        if self._timeout is None:
+            return None
+
+        if self._timeout < utcnow():
+            self._timeout = None
+
+        return self._timeout
+
+    @property
+    def timeout_duration(self) -> Optional[datetime.timedelta]:
+        """Optional[:class:`datetime.timedelta`]: How long the user is in timedout.
+        Could be ``None`` if they are not currently in timeout.
+        """
+        if self.timeout:
+            return utils.utcnow() - self.timeout
+        return None
+
     def mentioned_in(self, message: Message) -> bool:
         """Checks if the member is mentioned in the specified message.
 
@@ -580,8 +608,9 @@ class Member(discord.abc.Messageable, _UserTag):
 
     @property
     def role_icon(self) -> Optional[Asset]:
-        """Optional[:class:`Asset`]: Returns the role icon that is displayed next to this member's name,
-        and ``None`` if no icon is displayed.
+        """Optional[Union[:class:`Asset`, :class:`str`]]: Returns the role icon or
+        unicode emoji that is displayed next to this member's name, or ``None``
+        if no icon is displayed.
 
         .. versionadded:: 2.0
         """
@@ -589,8 +618,9 @@ class Member(discord.abc.Messageable, _UserTag):
             return None
 
         for role in reversed(self.roles):
-            if icon := role.icon:
-                return icon
+            display_icon = role.icon or role.unicode_emoji
+            if display_icon:
+                return display_icon
 
         return None  # Unnecessary but more readable
 
@@ -659,6 +689,7 @@ class Member(discord.abc.Messageable, _UserTag):
         suppress: bool = MISSING,
         roles: List[discord.abc.Snowflake] = MISSING,
         voice_channel: Optional[VocalGuildChannel] = MISSING,
+        timeout: Optional[datetime.datetime] = MISSING,
         reason: Optional[str] = None,
     ) -> Optional[Member]:
         """|coro|
@@ -679,6 +710,8 @@ class Member(discord.abc.Messageable, _UserTag):
         | roles         | :attr:`Permissions.manage_roles`     |
         +---------------+--------------------------------------+
         | voice_channel | :attr:`Permissions.move_members`     |
+        +---------------+--------------------------------------+
+        | timeout       | :attr:`Permissions.moderate_members` |
         +---------------+--------------------------------------+
 
         All parameters are optional.
@@ -707,6 +740,11 @@ class Member(discord.abc.Messageable, _UserTag):
         voice_channel: Optional[:class:`VoiceChannel`]
             The voice channel to move the member to.
             Pass ``None`` to kick them from voice.
+        timeout: Optional[:class:`datetime.datetime`]
+            When the user should be in timeout until.
+            Passing ``None`` or time in the past will remove any timeout.
+
+            .. versionadded:: 2.0
         reason: Optional[:class:`str`]
             The reason for editing this member. Shows up on the audit log.
 
@@ -762,6 +800,14 @@ class Member(discord.abc.Messageable, _UserTag):
 
         if roles is not MISSING:
             payload['roles'] = tuple(r.id for r in roles)
+
+        if timeout is not MISSING:
+            if timeout is None:
+                payload['communication_disabled_until'] = None
+            else:
+                if timeout.tzinfo is None:
+                    timeout = timeout.astimezone()
+                payload['communication_disabled_until'] = timeout.isoformat() if timeout < utcnow() else None
 
         if payload:
             data = await http.edit_member(guild_id, self.id, reason=reason, **payload)

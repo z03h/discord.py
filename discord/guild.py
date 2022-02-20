@@ -46,13 +46,12 @@ from typing import (
 from . import abc, utils
 from .asset import Asset
 from .channel import (
-    _guild_channel_factory, 
+    _guild_channel_factory,
     _threaded_guild_channel_factory,
-    VoiceChannel, 
-    StageChannel, 
-    TextChannel, 
-    CategoryChannel, 
-    StoreChannel,
+    VoiceChannel,
+    StageChannel,
+    TextChannel,
+    CategoryChannel
 )
 from .colour import Colour
 from .emoji import Emoji
@@ -65,6 +64,8 @@ from .enums import (
     VerificationLevel,
     VideoQualityMode,
     VoiceRegion,
+    GuildEventPrivacyLevel,
+    GuildEventLocationType,
     try_enum
 )
 from .errors import ClientException, InvalidArgument, InvalidData
@@ -83,9 +84,11 @@ from .threads import Thread, ThreadMember
 from .user import User
 from .welcome_screen import WelcomeScreen
 from .widget import Widget
+from .guild_events import GuildEvent
 
 __all__ = (
     'Guild',
+    'GuildPreview',
 )
 
 MISSING = utils.MISSING
@@ -94,12 +97,19 @@ if TYPE_CHECKING:
     import datetime
 
     from .abc import Snowflake, SnowflakeTime
-    from .types.guild import Ban as BanPayload, Guild as GuildPayload, MFALevel, GuildFeature
+    from .types.guild import (
+        Ban as BanPayload,
+        Guild as GuildPayload,
+        MFALevel,
+        GuildFeature,
+        GuildPreview as GuildPreviewPayload
+    )
     from .types.threads import (
         Thread as ThreadPayload,
     )
     from .types.voice import GuildVoiceState
     from .permissions import Permissions
+    from .channel import StoreChannel
     from .template import Template
     from .webhook import Webhook
     from .state import ConnectionState
@@ -217,6 +227,7 @@ class Guild(Hashable):
         - ``PARTNERED``: Guild is a partnered server.
         - ``PREVIEW_ENABLED``: Guild can be viewed before being accepted via Membership Screening.
         - ``PRIVATE_THREADS``: Guild has access to create private threads.
+        - ``ROLE_ICONS``:  Guild is able to set role icons.
         - ``SEVEN_DAY_THREAD_ARCHIVE``: Guild has access to the seven day archive time for threads.
         - ``THREE_DAY_THREAD_ARCHIVE``: Guild has access to the three day archive time for threads.
         - ``TICKETED_EVENTS_ENABLED``: Guild has enabled ticketed events.
@@ -241,6 +252,15 @@ class Guild(Hashable):
         Whether or not the premium boosting progress bar is displayed.
 
         .. versionadded:: 2.0
+    approximate_member_count: Optional[:class:`int`]
+        Approximate member count of the guild.
+    approximate_presence_count: Optional[:class:`int`]
+        Approximate presence count of the guild.
+
+        .. note::
+
+            ``approximate_member_count`` and ``approximate_presence_count`` are only
+            available when fetching the guild with ``with_counts``.
     """
 
     __slots__ = (
@@ -261,6 +281,8 @@ class Guild(Hashable):
         'description',
         'max_presences',
         'max_members',
+        'approximate_presence_count',
+        'approximate_member_count',
         'max_video_channel_users',
         'premium_tier',
         'premium_subscription_count',
@@ -284,6 +306,7 @@ class Guild(Hashable):
         '_public_updates_channel_id',
         '_stage_instances',
         '_threads',
+        '_events',
     )
 
     _PREMIUM_GUILD_LIMITS: ClassVar[Dict[Optional[int], _GuildLimit]] = {
@@ -299,6 +322,7 @@ class Guild(Hashable):
         self._members: Dict[int, Member] = {}
         self._voice_states: Dict[int, VoiceState] = {}
         self._threads: Dict[int, Thread] = {}
+        self._events: Dict[int, GuildEvent] = {}
         self._state: ConnectionState = state
         self._from_data(data)
 
@@ -341,6 +365,12 @@ class Guild(Hashable):
         for k in to_remove:
             del self._threads[k]
         return to_remove
+
+    def _add_event(self, event: GuildEvent, /):
+        self._events[event.id] = event
+
+    def _remove_event(self, event: Snowflake, /):
+        self._events.pop(event.id, None)
 
     def __str__(self) -> str:
         return self.name or ''
@@ -442,6 +472,8 @@ class Guild(Hashable):
         self.description: Optional[str] = guild.get('description')
         self.max_presences: Optional[int] = guild.get('max_presences')
         self.max_members: Optional[int] = guild.get('max_members')
+        self.approximate_presence_count: Optional[int] = guild.get('approximate_presence_count')
+        self.approximate_member_count: Optional[int] = guild.get('approximate_member_count')
         self.max_video_channel_users: Optional[int] = guild.get('max_video_channel_users')
         self.premium_tier: int = guild.get('premium_tier', 0)
         self.premium_subscription_count: int = guild.get('premium_subscription_count') or 0
@@ -500,6 +532,11 @@ class Guild(Hashable):
             for thread in threads:
                 self._add_thread(Thread(guild=self, state=self._state, data=thread))
 
+        if 'guild_scheduled_events' in data:
+            events = data['guild_scheduled_events']
+            for event in events:
+                self._add_event(GuildEvent(guild=self, state=self._state, data=event))
+
     @property
     def channels(self) -> List[GuildChannel]:
         """List[:class:`abc.GuildChannel`]: A list of channels that belongs to this guild."""
@@ -512,6 +549,14 @@ class Guild(Hashable):
         .. versionadded:: 2.0
         """
         return list(self._threads.values())
+
+    @property
+    def events(self) -> List[GuildEvent]:
+        """List[:class:`GuildEvent`]: A list of events the guild has.
+
+        .. versionadded:: 2.0
+        """
+        return list(self._events.values())
 
     @property
     def large(self) -> bool:
@@ -676,6 +721,23 @@ class Guild(Hashable):
             The returned thread or ``None`` if not found.
         """
         return self._threads.get(thread_id)
+
+    def get_event(self, event_id: int, /) -> Optional[GuildEvent]:
+        """Returns an event with the given ID.
+
+        .. versionadded:: 2.0
+
+        Parameters
+        -----------
+        event_id: :class:`int`
+            The ID to search for.
+
+        Returns
+        --------
+        Optional[:class:`GuildEvent`]
+            The returned event or ``None`` if not found.
+        """
+        return self._events.get(event_id)
 
     @property
     def system_channel(self) -> Optional[TextChannel]:
@@ -2208,8 +2270,7 @@ class Guild(Hashable):
             'name': name,
         }
 
-        if description:
-            payload['description'] = description
+        payload['description'] = '' if description is None else description
 
         try:
             emoji = unicodedata.name(emoji)
@@ -2524,7 +2585,7 @@ class Guild(Hashable):
             fields['icon'] = utils._bytes_to_base64_data(icon)
 
         if unicode_emoji is not MISSING:
-            fields['unicode_emoji'] = utils._bytes_to_base64_data(str(unicode_emoji))
+            fields['unicode_emoji'] = str(unicode_emoji)
 
         data = await self._state.http.create_role(self.id, reason=reason, **fields)
         role = Role(guild=self, data=data, state=self._state)
@@ -3005,3 +3066,271 @@ class Guild(Hashable):
         ws = self._state._get_websocket(self.id)
         channel_id = channel.id if channel else None
         await ws.voice_state(self.id, channel_id, self_mute, self_deaf)
+
+    async def fetch_events(self, with_user_count=False) -> List[GuildEvent]:
+        """|coro|
+
+        Fetches all events scheduled in this guild.
+
+        .. versionadded:: 2.0
+
+        Parameters
+        -----------
+        with_user_count: :class:`bool`
+            Whether to fetch events with the number of interested users.
+            :attr:`GuildEvent.user_count` requires this to be set to ``True`` to get a value.
+
+        Raises
+        -------
+        HTTPException
+            Fetching the events failed.
+
+        Returns
+        --------
+        List[:class:`GuildEvent`]
+            The events in this guild.
+        """
+
+        events = await self._state.http.get_guild_events(self.id, with_user_count=with_user_count)
+        return [GuildEvent(data=data, guild=self, state=self._state) for data in events]
+
+    async def fetch_event(self, event_id: int, /, with_user_count=False) -> GuildEvent:
+        """|coro|
+
+        Fetches a guild event by ID.
+
+        Parameters
+        -----------
+        event_id: :class:`int`
+            The ID of the event to fetch.
+        with_user_count: :class:`bool`
+            Whether to fetch events with the number of interested users.
+            :attr:`GuildEvent.user_count` requires this to be set to ``True`` to get a value.
+
+        Raises
+        -------
+        Forbidden
+            Missing permissions to see event.
+        HTTPException
+            Fetching the event failed.
+
+        Returns
+        --------
+        :class:`GuildEvent`
+            The events with matching ID.
+        """
+        data = await self._state.http.get_guild_event(self.id, event_id, with_user_count=with_user_count)
+        return GuildEvent(data=data, guild=self, state=self._state)
+
+    async def create_event(
+        self,
+        *,
+        name: str,
+        description: str = MISSING,
+        location: Union[str, VoiceChannel, StageChannel],
+        start_time: datetime,
+        end_time: datetime = MISSING,
+        privacy_level: GuildEventPrivacyLevel = GuildEventPrivacyLevel.guild_only,
+        cover_image: bytes = MISSING,
+        reason: Optional[str] = None
+    ) -> GuildEvent:
+        """|coro|
+        Creates a :class:`GuildEvent`.
+
+        .. versionadded:: 2.0
+
+        Parameters
+        -----------
+        name: :class:`str`
+            The name of the event.
+        description: Optional[:class:`str`]
+            The description of the event.
+        start_time: :class:`datetime.datetime`
+            A datetime object of when the event is supposed to start.
+        end_time: Optional[:class:`datetime.datetime`]
+            A datetime object of when the event is supposed to end.
+        location: Union[str, VoiceChannel, StageChannel]
+            The location for this event.
+        privacy_level: :class:`GuildEventPrivacyLevel`
+            The privacy level of the event.
+        cover_image: :class:`bytes`
+            The cover image for this event.
+        reason: Optional[:class:`str`]
+            The reason to show in the audit log.
+        Raises
+        -------
+        Forbidden
+            You do not have the Manage Events permission.
+        HTTPException
+            The operation failed.
+        TypeError
+            An invalid location was given.
+
+        Returns
+        --------
+        :class:`GuildEvent`
+            The created guild event.
+        """
+
+        payload: Dict[str, Any] = {
+            'name': name,
+            'scheduled_start_time': start_time.isoformat(),
+            'privacy_level': int(privacy_level)
+        }
+
+        if isinstance(location, str):
+            payload['entity_metadata'] = {'location': location}
+            payload['entity_type'] = int(GuildEventLocationType.external)
+        else:
+            if isinstance(location, VoiceChannel):
+                payload['entity_type'] = int(GuildEventLocationType.voice)
+            elif isinstance(location, StageChannel):
+                payload['entity_type'] = int(GuildEventLocationType.stage)
+            else:
+                raise TypeError('location must be a VoiceChannel, StageChannel, or str.')
+            payload['channel_id'] = location.id
+
+        if description is not MISSING:
+            payload['description'] = description
+
+        if end_time is not MISSING:
+            payload['scheduled_end_time'] = end_time.isoformat()
+
+        if cover_image is not MISSING:
+            payload['image'] = utils._bytes_to_base64_data(cover_image)
+
+        data = await self._state.http.create_guild_event(guild_id=self.id, reason=reason, **payload)
+        event = GuildEvent(state=self._state, guild=self, data=data)
+        return event
+
+
+class GuildPreview(Hashable):
+    """Represents a Discord guild preview.
+
+    If the bot is not in the guild, then the guild must be lurkable.
+
+    .. versionadded:: 2.0
+
+    .. container:: operations
+
+        .. describe:: x == y
+
+            Checks if two guild previews are equal.
+
+        .. describe:: x != y
+
+            Checks if two guild previews are not equal.
+
+        .. describe:: hash(x)
+
+            Returns the guild's hash.
+
+        .. describe:: str(x)
+
+            Returns the guild's name.
+
+    Attributes
+    ----------
+    name: :class:`str`
+        The guild name.
+    emojis: Tuple[:class:`Emoji`, ...]
+        All emojis that the guild owns.
+    stickers: Tuple[:class:`GuildSticker`, ...]
+        All stickers that the guild owns.
+    id: :class:`int`
+        The guild's ID.
+    description: Optional[:class:`str`]
+        The guild's description.
+    features: List[:class:`str`]
+        A list of features that the guild has. The features that a guild can have are
+        subject to arbitrary change by Discord.
+
+        They are currently as follows:
+
+        - ``ANIMATED_ICON``: Guild can upload an animated icon.
+        - ``BANNER``: Guild can upload and use a banner. (i.e. :attr:`.banner`)
+        - ``COMMERCE``: Guild can sell things using store channels.
+        - ``COMMUNITY``: Guild is a community server.
+        - ``DISCOVERABLE``: Guild shows up in Server Discovery.
+        - ``FEATURABLE``: Guild is able to be featured in Server Discovery.
+        - ``INVITE_SPLASH``: Guild's invite page can have a special splash.
+        - ``MEMBER_VERIFICATION_GATE_ENABLED``: Guild has Membership Screening enabled.
+        - ``MONETIZATION_ENABLED``: Guild has enabled monetization.
+        - ``MORE_EMOJI``: Guild has increased custom emoji slots.
+        - ``MORE_STICKERS``: Guild has increased custom sticker slots.
+        - ``NEWS``: Guild can create news channels.
+        - ``PARTNERED``: Guild is a partnered server.
+        - ``PREVIEW_ENABLED``: Guild can be viewed before being accepted via Membership Screening.
+        - ``PRIVATE_THREADS``: Guild has access to create private threads.
+        - ``ROLE_ICONS``:  Guild is able to set role icons.
+        - ``SEVEN_DAY_THREAD_ARCHIVE``: Guild has access to the seven day archive time for threads.
+        - ``THREE_DAY_THREAD_ARCHIVE``: Guild has access to the three day archive time for threads.
+        - ``TICKETED_EVENTS_ENABLED``: Guild has enabled ticketed events.
+        - ``VANITY_URL``: Guild can have a vanity invite URL (e.g. discord.gg/discord-api).
+        - ``VERIFIED``: Guild is a verified server.
+        - ``VIP_REGIONS``: Guild has VIP voice regions.
+        - ``WELCOME_SCREEN_ENABLED``: Guild has enabled the welcome screen.
+    approximate_member_count: Optional[:class:`int`]
+        Approximate member count of the guild.
+    approximate_presence_count: Optional[:class:`int`]
+        Approximate presence count of the guild.
+    """
+    __slots__ = (
+        '_state',
+        'name',
+        'id',
+        'emojis',
+        'stickers',
+        'features',
+        'description',
+        'approximate_presence_count',
+        'approximate_member_count',
+        '_icon',
+        '_splash',
+        '_discovery_splash',
+    )
+
+    def __init__(self, *, state: ConnectionState, data: GuildPreviewPayload):
+        self._state: ConnectionState = state
+        self.name: str = data['name']
+        self.id: int = int(data['id'])
+        self.description: Optional[str] = data.get('description')
+
+        self._discovery_splash: Optional[str] = data.get('discovery_splash')
+        self._icon: Optional[str] = data.get('icon')
+        self._splash: Optional[str] = data.get('splash')
+
+        self.approximate_presence_count: Optional[int] = data.get('approximate_presence_count')
+        self.approximate_member_count: Optional[int] = data.get('approximate_member_count')
+
+        self.features: List[GuildFeature] = data.get('features', [])
+
+        self.emojis = [Emoji(guild=self, state=state, data=emoji_data) for emoji_data in data.get('emojis')]
+        self.stickers = [GuildSticker(state=state, data=sticker_data) for sticker_data in data.get('stickers')]
+
+    @property
+    def icon(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the guild's icon asset, if available."""
+        if self._icon is None:
+            return None
+        return Asset._from_guild_icon(self._state, self.id, self._icon)
+
+    @property
+    def splash(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the guild's invite splash asset, if available."""
+        if self._splash is None:
+            return None
+        return Asset._from_guild_image(self._state, self.id, self._splash, path='splashes')
+
+    @property
+    def discovery_splash(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the guild's discovery splash asset, if available."""
+        if self._discovery_splash is None:
+            return None
+        return Asset._from_guild_image(self._state, self.id, self._discovery_splash, path='discovery-splashes')
+
+    @property
+    def guild(self):
+        """Optional[:class:`Guild`]: The guild from cache, if available."""
+        return self._state._get_guild(self.id)
+
