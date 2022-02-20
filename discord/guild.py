@@ -3067,7 +3067,7 @@ class Guild(Hashable):
         channel_id = channel.id if channel else None
         await ws.voice_state(self.id, channel_id, self_mute, self_deaf)
 
-    async def fetch_guild_events(self, with_user_count=False) -> List[GuildEvent]:
+    async def fetch_events(self, with_user_count=False) -> List[GuildEvent]:
         """|coro|
 
         Fetches all events scheduled in this guild.
@@ -3094,7 +3094,7 @@ class Guild(Hashable):
         events = await self._state.http.get_guild_events(self.id, with_user_count=with_user_count)
         return [GuildEvent(data=data, guild=self, state=self._state) for data in events]
 
-    async def fetch_guild_event(self, event_id: int, /, with_user_count=False) -> GuildEvent:
+    async def fetch_event(self, event_id: int, /, with_user_count=False) -> GuildEvent:
         """|coro|
 
         Fetches a guild event by ID.
