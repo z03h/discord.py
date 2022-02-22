@@ -440,7 +440,7 @@ class User(BaseUser, discord.abc.Messageable):
 
     def __del__(self) -> None:
         try:
-            if self._stored:
+            if self._stored and self._state._users[self.id] is self:
                 self._state.deref_user(self.id)
         except Exception:
             pass
