@@ -29,7 +29,7 @@ import inspect
 import itertools
 import sys
 from operator import attrgetter
-from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple, Type, TypeVar, Union, overload
+from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING, Tuple, Type, TypeVar, Union
 
 import discord.abc
 
@@ -49,7 +49,6 @@ __all__ = (
 )
 
 if TYPE_CHECKING:
-    from .asset import Asset
     from .channel import DMChannel, VoiceChannel, StageChannel
     from .flags import PublicUserFlags
     from .guild import Guild
@@ -968,3 +967,20 @@ class Member(discord.abc.Messageable, _UserTag):
             The role or ``None`` if not found in the member's roles.
         """
         return self.guild.get_role(role_id) if self._roles.has(role_id) else None
+
+    def has_role(self, role: Snowflake, /) -> bool:
+        """Returns a boolean indicating if the member has the given role.
+
+        .. versionadded:: 2.0
+
+        Parameters
+        ----------
+        role: :class:`discord.abc.Snowflake`
+            The role to check for. This can be the role object or just an :class:`discord.Object` that has the role's ID.
+
+        Returns
+        -------
+        :class:`bool`
+            Whether or not this member has the given role.
+        """
+        return self._roles.has(role.id)
