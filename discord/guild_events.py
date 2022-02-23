@@ -109,8 +109,10 @@ class GuildEvent(Hashable):
 
         .. note::
 
-            :attr:`creator` and :attr:`creator_id`Will be  ``None`` for
-            events created before October 25th, 2021.
+            You must fetch the event for creator fields to be populared.
+
+            :attr:`creator` and :attr:`creator_id` will be  ``None`` for
+            events created before 25th October, 2021.
 
     privacy_level: :class:`GuildEventPrivacyLevel`
         The privacy level of the event.

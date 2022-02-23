@@ -967,4 +967,4 @@ class Member(discord.abc.Messageable, _UserTag):
         Optional[:class:`Role`]
             The role or ``None`` if not found in the member's roles.
         """
-        return self.guild.get_role(role_id) if self._roles.has(role_id) else None
+        return self.guild.get_role(role_id) if self._roles.has(role_id) or role_id == self.guild.id else None
