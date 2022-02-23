@@ -65,7 +65,7 @@ from typing import (
     Tuple,
     Type,
     TYPE_CHECKING,
-    Union,
+    TypeVar, Union,
 )
 
 if TYPE_CHECKING:
@@ -88,30 +88,29 @@ if TYPE_CHECKING:
         Sequence[Union[str, float]]
     ]
 
-    ApplicationCommandOptionTypeT = Union[
-        ApplicationCommandType,
-        Literal[
-            str,
-            int,
-            bool,
-            User,
-            Member,
-            Messageable,
-            TextChannel,
-            Thread,
-            VoiceChannel,
-            StageChannel,
-            StoreChannel,
-            CategoryChannel,
-            GuildChannel,
-            Role,
-            Object,
-            Snowflake,
-            Attachment,
-            float,
-        ]
-    ]
+    _ApplicationCommandOptionTypeAnnotationT = TypeVar(
+        '_ApplicationCommandOptionTypeAnnotationT',
+        str,
+        int,
+        bool,
+        User,
+        Member,
+        Messageable,
+        TextChannel,
+        Thread,
+        VoiceChannel,
+        StageChannel,
+        StoreChannel,
+        CategoryChannel,
+        GuildChannel,
+        Role,
+        Object,
+        Snowflake,
+        Attachment,
+        float,
+    )
 
+    ApplicationCommandOptionTypeT = Union[ApplicationCommandType, _ApplicationCommandOptionTypeAnnotationT]
     AutocompleteCallbackT = Callable[['ApplicationCommandMeta', Interaction], Awaitable[AutocompleteChoicesT]]
 
 _PY_310 = sys.version_info >= (3, 10)
@@ -119,7 +118,7 @@ _PY_310 = sys.version_info >= (3, 10)
 if _PY_310:
     from types import UnionType
 
-OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
+OPTION_TYPE_MAPPING: Final[Dict[_ApplicationCommandOptionTypeAnnotationT, ApplicationCommandOptionType]] = {
     str: ApplicationCommandOptionType.string,
     int: ApplicationCommandOptionType.integer,
     bool: ApplicationCommandOptionType.boolean,
@@ -140,7 +139,7 @@ OPTION_TYPE_MAPPING: Final[Dict[type, ApplicationCommandOptionType]] = {
     float: ApplicationCommandOptionType.number,
 }
 
-CHANNEL_TYPE_MAPPING: Final[Dict[type, ChannelType]] = {
+CHANNEL_TYPE_MAPPING: Final[Dict[_ApplicationCommandOptionTypeAnnotationT, ChannelType]] = {
     Messageable: (
         ChannelType.text,
         ChannelType.news,
@@ -221,7 +220,7 @@ class ApplicationCommandTree:
         """
         return list(self._global_commands)
 
-    def guild_commands_for(self, guild_id: int, /) -> None:
+    def guild_commands_for(self, guild_id: int, /) -> list[ApplicationCommandMeta]:
         """Returns a list of all application commands this tree holds that are in the given guild.
 
         Parameters
@@ -358,7 +357,7 @@ class ApplicationCommandOption:
 
     def to_dict(self) -> ApplicationCommandOptionPayload:
         payload = {
-            'type': self.type.value,
+            'type': self.type.value,  # type: ignore
             'name': self.name,
             'description': self.description,
             'required': bool(self.required),
@@ -368,7 +367,7 @@ class ApplicationCommandOption:
             payload['choices'] = [choice.to_dict() for choice in self.choices]
 
         if self.channel_types is not MISSING:
-            payload['channel_types'] = [type.value for type in self.channel_types]
+            payload['channel_types'] = [type.value for type in self.channel_types]  # type: ignore
 
         if self._autocomplete_callback is not MISSING:
             payload['autocomplete'] = True
@@ -394,7 +393,7 @@ class ApplicationCommandOption:
         )
 
     def __repr__(self) -> str:
-        return f'<ApplicationCommandOption type={self.type.name!r} name={self.name!r} required={self.required}>'
+        return f'<ApplicationCommandOption type={self.type.name!r} name={self.name!r} required={self.required}>'  # type: ignore
 
 
 def option(
