@@ -966,7 +966,7 @@ class Member(discord.abc.Messageable, _UserTag):
         Optional[:class:`Role`]
             The role or ``None`` if not found in the member's roles.
         """
-        return self.guild.get_role(role_id) if self._roles.has(role_id) else None
+        return self.guild.get_role(role_id) if self._roles.has(role_id) or self.guild.id == role_id else None
 
     def has_role(self, role: Snowflake, /) -> bool:
         """Returns a boolean indicating if the member has the given role.
@@ -983,4 +983,4 @@ class Member(discord.abc.Messageable, _UserTag):
         :class:`bool`
             Whether or not this member has the given role.
         """
-        return self._roles.has(role.id)
+        return self._roles.has(role.id) or self.guild.id == role.id
