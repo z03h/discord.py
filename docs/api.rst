@@ -4410,11 +4410,6 @@ ApplicationCommandTree
 .. autoclass:: discord.application_commands.ApplicationCommandTree
     :members:
 
-Range
-~~~~~
-
-.. autoclass:: discord.application_commands.Range
-
 SlashCommand
 ~~~~~~~~~~~~
 
