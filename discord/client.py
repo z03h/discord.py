@@ -29,39 +29,51 @@ import logging
 import signal
 import sys
 import traceback
-from typing import Any, Callable, Coroutine, Dict, Generator, List, Optional, Sequence, TYPE_CHECKING, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Coroutine,
+    Dict,
+    Generator,
+    Iterable, List,
+    Optional,
+    Sequence,
+    TYPE_CHECKING,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import aiohttp
 
 from . import utils
-from .user import User, ClientUser
-from .invite import Invite
-from .template import Template
-from .widget import Widget
-from .guild import Guild, GuildPreview
+from .activity import ActivityTypes, BaseActivity, create_activity
+from .appinfo import AppInfo
+from .backoff import ExponentialBackoff
+from .channel import PartialMessageable, _threaded_channel_factory
 from .emoji import Emoji
-from .channel import _threaded_channel_factory, PartialMessageable
-from .enums import ChannelType
-from .mentions import AllowedMentions
+from .enums import ApplicationCommandType, ChannelType, Status, try_enum
 from .errors import *
-from .enums import Status, VoiceRegion, try_enum, ApplicationCommandType
 from .flags import ApplicationFlags, Intents
 from .gateway import *
-from .activity import ActivityTypes, BaseActivity, create_activity
-from .voice_client import VoiceClient
+from .guild import Guild, GuildPreview
 from .http import HTTPClient
-from .state import ConnectionState
-from .utils import MISSING
-from .object import Object
-from .backoff import ExponentialBackoff
-from .interactions import Interaction, ApplicationCommand
-from .webhook import Webhook
+from .interactions import ApplicationCommand, Interaction
+from .invite import Invite
 from .iterators import GuildIterator
-from .appinfo import AppInfo
-from .ui.view import View
+from .mentions import AllowedMentions
+from .object import Object
 from .stage_instance import StageInstance
-from .threads import Thread
+from .state import ConnectionState
 from .sticker import GuildSticker, StandardSticker, StickerPack, _sticker_factory
+from .template import Template
+from .threads import Thread
+from .ui.view import View
+from .user import ClientUser, User
+from .utils import MISSING
+from .voice_client import VoiceClient
+from .webhook import Webhook
+from .widget import Widget
 
 if TYPE_CHECKING:
     from .application_commands import ApplicationCommandMeta as NativeApplicationCommand, ApplicationCommandTree
@@ -79,6 +91,7 @@ Coro = TypeVar('Coro', bound=Callable[..., Coroutine[Any, Any, Any]])
 
 
 _log = logging.getLogger(__name__)
+
 
 def _cancel_tasks(loop: asyncio.AbstractEventLoop) -> None:
     tasks = {t for t in asyncio.all_tasks(loop=loop) if not t.done()}
@@ -102,6 +115,7 @@ def _cancel_tasks(loop: asyncio.AbstractEventLoop) -> None:
                 'exception': task.exception(),
                 'task': task
             })
+
 
 def _cleanup_loop(loop: asyncio.AbstractEventLoop) -> None:
     try:
@@ -369,6 +383,7 @@ class Client:
         """:class:`bool`: Specifies if the client's internal cache is ready for use."""
         return self._ready.is_set()
 
+    # noinspection PyBroadException
     async def _run_event(self, coro: Callable[..., Coroutine[Any, Any, Any]], event_name: str, *args: Any, **kwargs: Any) -> None:
         try:
             await coro(*args, **kwargs)
@@ -563,7 +578,7 @@ class Client:
                 GatewayNotFound,
                 ConnectionClosed,
                 aiohttp.ClientError,
-                asyncio.TimeoutError
+                asyncio.TimeoutError,
             ) as exc:
                 self.dispatch('disconnect')
                 if not reconnect:
@@ -588,6 +603,7 @@ class Client:
                 if isinstance(exc, ConnectionClosed):
                     if exc.code == 4014:
                         raise PrivilegedIntentsRequired(exc.shard_id) from None
+
                     if exc.code != 1000:
                         await self.close()
                         raise
@@ -675,8 +691,8 @@ class Client:
         loop = self.loop
 
         try:
-            loop.add_signal_handler(signal.SIGINT, lambda: loop.stop())
-            loop.add_signal_handler(signal.SIGTERM, lambda: loop.stop())
+            loop.add_signal_handler(signal.SIGINT, loop.stop)
+            loop.add_signal_handler(signal.SIGTERM, loop.stop)
         except NotImplementedError:
             pass
 
@@ -1042,9 +1058,8 @@ class Client:
 
         future = self.loop.create_future()
         if check is None:
-            def _check(*args):
+            def check(*_args):
                 return True
-            check = _check
 
         ev = event.lower()
         try:
@@ -1228,7 +1243,7 @@ class Client:
         """
         code = utils.resolve_template(code)
         data = await self.http.get_template(code)
-        return Template(data=data, state=self._connection) # type: ignore
+        return Template(data=data, state=self._connection)  # type: ignore
 
     async def fetch_guild(self, guild_id: int, /, with_counts: bool = False) -> Guild:
         """|coro|
@@ -1569,15 +1584,13 @@ class Client:
 
         if ch_type in (ChannelType.group, ChannelType.private):
             # the factory will be a DMChannel or GroupChannel here
-            channel = factory(me=self.user, data=data, state=self._connection) # type: ignore
-        else:
-            # the factory can't be a DMChannel or GroupChannel here
-            guild_id = int(data['guild_id']) # type: ignore
-            guild = self.get_guild(guild_id) or Object(id=guild_id)
-            # GuildChannels expect a Guild, we may be passing an Object
-            channel = factory(guild=guild, state=self._connection, data=data) # type: ignore
+            return factory(me=self.user, data=data, state=self._connection)  # type: ignore
 
-        return channel
+        # the factory can't be a DMChannel or GroupChannel here
+        guild_id = int(data['guild_id'])  # type: ignore
+        guild = self.get_guild(guild_id) or Object(id=guild_id)
+        # GuildChannels expect a Guild, we may be passing an Object
+        return factory(guild=guild, state=self._connection, data=data)  # type: ignore
 
     async def fetch_webhook(self, webhook_id: int, /) -> Webhook:
         """|coro|
@@ -1622,7 +1635,7 @@ class Client:
         """
         data = await self.http.get_sticker(sticker_id)
         cls, _ = _sticker_factory(data['type'])  # type: ignore
-        return cls(state=self._connection, data=data) # type: ignore
+        return cls(state=self._connection, data=data)  # type: ignore
 
     async def fetch_premium_sticker_packs(self) -> List[StickerPack]:
         """|coro|
@@ -1672,7 +1685,7 @@ class Client:
         data = await state.http.start_private_message(user.id)
         return state.add_dm_channel(data)
 
-    def _store_commands(self, commands: List[NativeApplicationCommand], guild_id: int = None) -> None:
+    def _store_commands(self, commands: Iterable[NativeApplicationCommand], guild_id: int = None) -> None:
         for command in commands:
             key = command.__application_command_name__, command.__application_command_type__, guild_id
             try:
@@ -1822,7 +1835,7 @@ class Client:
         ------------
         id: :class:`int`
             The id of the command being cached.
-        commands: Type[:class:`.application_commands.ApplicationCommand`]
+        native_command: Type[:class:`.application_commands.ApplicationCommand`]
             The command to be cached.
         guild_id: Optional[:class:`int`]
             The guild id the command belongs to.

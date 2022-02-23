@@ -527,17 +527,16 @@ class GuildIterator(_AsyncIterator['Guild']):
         Object after which all guilds must be.
     """
 
-    def __init__(self, bot, limit, before=None, after=None):
-
+    def __init__(self, bot, limit: int, before: Union[Snowflake, datetime, None] = None, after: Union[Snowflake, datetime, None] = None):
         if isinstance(before, datetime.datetime):
             before = Object(id=time_snowflake(before, high=False))
         if isinstance(after, datetime.datetime):
             after = Object(id=time_snowflake(after, high=True))
 
         self.bot = bot
-        self.limit = limit
-        self.before = before
-        self.after = after
+        self.limit: int = limit
+        self.before: Union[Snowflake, datetime, None] = before
+        self.after: Union[Snowflake, datetime, None] = after
 
         self._filter = None
 
