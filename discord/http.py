@@ -1109,7 +1109,7 @@ class HTTPClient:
 
         return self.request(Route('PATCH', '/guilds/{guild_id}', guild_id=guild_id), json=payload, reason=reason)
 
-    def get_guild_preview(self, guild_id: Snowlfake):
+    def get_guild_preview(self, guild_id: Snowflake):
         return self.request(Route('GET', '/guilds/{guild_id}/preview', guild_id=guild_id))
 
     def get_template(self, code: str) -> Response[template.Template]:
@@ -1833,7 +1833,7 @@ class HTTPClient:
         self,
         application_id: Snowflake,
         token: str,
-        files: List[File] = [],
+        files: Optional[List[File]] = None,
         content: Optional[str] = None,
         tts: bool = False,
         embeds: Optional[List[embed.Embed]] = None,
@@ -1845,6 +1845,8 @@ class HTTPClient:
             application_id=application_id,
             interaction_token=token,
         )
+        files = [] if files is None else files
+
         return self.send_multipart_helper(
             r,
             content=content,

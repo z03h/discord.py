@@ -41,6 +41,7 @@ __all__ = (
     'Object',
 )
 
+
 class Object(Hashable):
     """Represents a generic Discord object.
 
