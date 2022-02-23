@@ -113,6 +113,9 @@ if TYPE_CHECKING:
     ApplicationCommandOptionTypeT = Union[ApplicationCommandType, _ApplicationCommandOptionTypeAnnotationT]
     AutocompleteCallbackT = Callable[['ApplicationCommandMeta', Interaction], Awaitable[AutocompleteChoicesT]]
 
+    RangeT = TypeVar('RangeT', bound='Range')
+    RangeArgumentT = TypeVar('RangeArgumentT', int, float)
+
 _PY_310 = sys.version_info >= (3, 10)
 
 if _PY_310:
@@ -175,6 +178,7 @@ __all__ = (
     'ApplicationCommandOption',
     'ApplicationCommandOptionChoice',
     'ApplicationCommandTree',
+    'Range',
     'SlashCommand',
     'MessageCommand',
     'UserCommand',
@@ -462,7 +466,12 @@ def option(
 
     if type is not MISSING and not isinstance(type, ApplicationCommandOptionType):
         try:
-            type = OPTION_TYPE_MAPPING[type]
+            if isinstance(type, Range):
+                min_value = type.min_value if min_value is MISSING else min_value
+                max_value = type.max_value if max_value is MISSING else max_value
+                type = type._type
+            else:
+                type = OPTION_TYPE_MAPPING[type]  # type: ignore
         except KeyError:
             raise ValueError(f'{type!r} is an incompatable option type.')
 
@@ -585,6 +594,12 @@ def _resolve_option_annotation(
         if annotation in APPLICABLE_CHANNEL_TYPES and not option.channel_types:
             entry = CHANNEL_TYPE_MAPPING[annotation]
             option.channel_types = [entry] if isinstance(entry, ChannelType) else list(entry)
+
+        if isinstance(annotation, Range):
+            option.min_value = annotation.min_value
+            option.max_value = annotation.max_value
+            option.type = annotation._type
+            return
 
         try:
             annotation = OPTION_TYPE_MAPPING[annotation]
@@ -1178,6 +1193,76 @@ class ApplicationCommandStore:
             self.request_autocomplete_choices(command, option, interaction),
             name=f'discord-application-commands-dispatch-{interaction.id}',
         )
+
+
+class Range:
+    """A helper type annotation which represents a numeric value in the specified range.
+
+    This can be constructed via subscripting the class directly, just like any other generic type annotation.
+
+    - If you pass in two arguments, the first is the minimum value and the second is the maximum value.
+    - If you pass in one argument, there will be no minimum value and the value will be the maximum value.
+    - If any one of the arguments is a float, then the option type will be resolved to ``NUMBER``, else ``INTEGER``.
+
+    .. versionadded:: 2.0
+
+    Usage ::
+
+        from discord.application_commands import ApplicationCommand, Range, option
+
+        class Rate(ApplicationCommand):
+            \"""What rating would you give me?\"""
+            rating: Range[1, 10] = option(description="Your rating", required=True)
+    """
+
+    def __init__(self, min_value: RangeArgumentT = MISSING, max_value: RangeArgumentT = MISSING) -> None:
+        self.min_value: RangeArgumentT = min_value
+        self.max_value: RangeArgumentT = max_value
+
+        if min_value is MISSING and max_value is MISSING:
+            raise TypeError('at least one of min_value and max_value must be specified')
+
+    @staticmethod
+    def _is_int(value: RangeArgumentT) -> bool:
+        return value is MISSING or isinstance(value, int)
+
+    @property
+    def _type(self) -> ApplicationCommandOptionType:
+        if self._is_int(self.min_value) and self._is_int(self.max_value):
+            return ApplicationCommandOptionType.integer
+
+        return ApplicationCommandOptionType.number
+
+    def __class_getitem__(
+        cls: Type[RangeT],
+        item: Union[RangeArgumentT, Tuple[Optional[RangeArgumentT], Optional[RangeArgumentT]]],
+    ) -> RangeT:
+        if isinstance(item, (int, float)):
+            return cls(MISSING, item)
+
+        if isinstance(item, tuple):
+            if len(item) > 2:
+                raise TypeError(f'expected 2 arguments, got {len(item)} instead.')
+
+            if len(item) == 1:
+                return cls(MISSING, item[0])
+
+            lower, upper = item
+            return cls(MISSING if lower is None else lower, MISSING if upper is None else upper)
+
+        raise TypeError('invalid range arguments specified.')
+
+
+if TYPE_CHECKING:
+    class Range(int, float):
+        min_value: Union[int, float]
+        max_value: Union[int, float]
+
+        def __class_getitem__(
+            cls: Type[RangeT],
+            item: Union[RangeArgumentT, Tuple[Optional[RangeArgumentT], Optional[RangeArgumentT]]],
+        ) -> RangeT:
+            ...
 
 
 # shortcuts
