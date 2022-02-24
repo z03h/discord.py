@@ -236,8 +236,8 @@ class ConnectionState:
         self._status: Optional[str] = status
         self._intents: Intents = intents
 
-        self._queued_global_application_commands: Dict[Tuple(str, ApplicationCommandType), NativeApplicationCommand] = {}
-        self._queued_guild_application_commands: Dict[int, Dict[Tuple(str, ApplicationCommandType), NativeApplicationCommand]] = defaultdict(dict)
+        self._queued_global_application_commands: Dict[Tuple[str, ApplicationCommandType], NativeApplicationCommand] = {}
+        self._queued_guild_application_commands: Dict[int, Dict[Tuple[str, ApplicationCommandType], NativeApplicationCommand]] = defaultdict(dict)
 
         self.cached_application_commands: Dict[int, ApplicationCommand] = {}
         self.cached_application_commands_by_name: Dict[Tuple[str, ApplicationCommandType, Optional[int]], ApplicationCommand] = {}

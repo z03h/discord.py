@@ -573,6 +573,7 @@ class Interaction:
         '_cs_response',
         '_cs_followup',
         '_cs_channel',
+        '_cs_native_command',
     )
 
     def __init__(self, *, data: InteractionPayload, state: ConnectionState, client: Client):
@@ -689,6 +690,14 @@ class Interaction:
             'token': self.token,
         }
         return Webhook.from_state(data=payload, state=self._state)
+
+    @utils.cached_slot_property('_cs_native_command')
+    def native_command(self) -> Optional[NativeApplicationCommand]:
+        """Type[:class:`application_commands.ApplicationCommand`]: The native command object which was declaratively defined in your codebase.
+
+        This is only available if the command is actually defined and if it is stored - else this will be ``None``.
+        """
+        return self._state._application_commands_store.commands.get(self.command.id)
 
     async def original_message(self) -> InteractionMessage:
         """|coro|

@@ -238,6 +238,20 @@ class ApplicationCommandTree:
         """
         return list(self._guild_commands[guild_id])
 
+    def command(self, *, guild_id: int = MISSING) -> Callable[[ApplicationCommandMeta], ApplicationCommandMeta]:
+        """Returns a decorator that adds the decorated command to this tree.
+
+        Parameters
+        ----------
+        guild_id: int
+            The ID of the guild to add the command to. Defaults to ``None``, which adds the command to all guilds.
+        """
+        def decorator(command: ApplicationCommandMeta) -> ApplicationCommandMeta:
+            self.add_command(command, guild_id=guild_id)
+            return command
+
+        return decorator
+
     def add_command(self, command: ApplicationCommandMeta, *, guild_id: int = MISSING) -> None:
         """Adds a command to this tree.
 
@@ -271,6 +285,42 @@ class ApplicationCommandTree:
         """
         for command in commands:
             self.add_command(command, guild_id=guild_id)
+
+    def remove_command(self, command: ApplicationCommandMeta, *, guild_id: int = MISSING) -> None:
+        """Removes command from this tree. If the command doesn't exist this will fail silently.
+
+        Parameters
+        ----------
+        command: Type[:class:`.ApplicationCommand`]
+            The command to remove.
+        guild_id: int
+            The ID of the guild that this command is in.
+            Leave as ``None`` if this command is global.
+
+            .. note::
+                This MUST be specified is this command is guild-specific.
+        """
+        guild_id = guild_id or command.__application_command_guild_id__ or self._guild_id
+
+        if not guild_id:
+            self._global_commands.discard(command)
+        else:
+            self._guild_commands[guild_id].discard(command)
+
+        command.__application_command_tree__ = None
+
+    def _modify_command_guild_id(self, command: ApplicationCommandMeta, old: int, new: int) -> None:
+        old = old or command.__application_command_guild_id__ or self._guild_id
+        if old is MISSING:
+            self._global_commands.discard(command)
+        else:
+            self._guild_commands[old].discard(command)
+
+        new = new or command.__application_command_guild_id__ or self._guild_id
+        if new is MISSING:
+            self._global_commands.add(command)
+        else:
+            self._guild_commands[new].add(command)
 
 
 class ApplicationCommandOptionChoice(NamedTuple):
@@ -655,6 +705,7 @@ def _get_application_command_options(
     return result
 
 
+# noinspection PyUnresolvedReferences
 class ApplicationCommandMeta(type):
     """The metaclass for defining an application command.
 
@@ -689,7 +740,7 @@ class ApplicationCommandMeta(type):
         __application_command_default_permission__: bool
         __application_command_options__: Dict[str, ApplicationCommandOption]
         __application_command_parent__: ApplicationCommandMeta
-        __application_command_children__: Dict[str, ApplicationCommand]
+        __application_command_children__: Dict[str, ApplicationCommandMeta]
         __application_command_guild_id__: int
         __application_command_tree__: ApplicationCommandTree
 
@@ -851,9 +902,121 @@ class ApplicationCommandMeta(type):
             False,
         )
 
+    @property
+    def type(cls) -> ApplicationCommandType:
+        """:class:`~.ApplicationCommandType`: The type of the command."""
+        return cls.__application_command_type__
+
+    @property
+    def name(cls) -> str:
+        """:class:`str`: The name of the command."""
+        return cls.__application_command_name__
+
+    @name.setter
+    def name(cls, value: str) -> None:
+        if not isinstance(value, str):
+            raise TypeError('command name must be a str')
+
+        if cls.__application_command_type__ is ApplicationCommandType.chat_input:
+            if any(map(str.isspace, value)):
+                raise ValueError('command name cannot contain whitespace.')
+
+            value = value.casefold()
+
+        cls.__application_command_name__ = value
+
+    @property
+    def description(cls) -> str:
+        """:class:`str`: The description of the command."""
+        return cls.__application_command_description__
+
+    @description.setter
+    def description(cls, value: str) -> None:
+        if not isinstance(value, str):
+            raise TypeError('command description must be a str')
+
+        cls.__application_command_description__ = value
+
+    @property
+    def default_permission(cls) -> bool:
+        """:class:`bool`: Whether or not this command is enabled by default when added to a guild."""
+        return cls.__application_command_default_permission__
+
+    @default_permission.setter
+    def default_permission(cls, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError('command default_permission must be a bool')
+
+        cls.__application_command_default_permission__ = value
+
+    @property
+    def options(cls) -> List[ApplicationCommandOption]:
+        """List[:class:`.ApplicationCommandOption`]: The options this command takes.
+
+        .. note::
+            This property is strictly read-only. Appending to the returned list will not have any effect.
+        """
+        return list(cls.__application_command_options__.values())
+
+    @property
+    def parent(cls) -> Optional[ApplicationCommandMeta]:
+        """:class:`.ApplicationCommandMeta`: The parent command of this command.
+
+        Only applicable to commands which are subcommand groups or subcommands. Otherwise, ``None`` is returned.
+        """
+        return cls.__application_command_parent__ or None
+
+    @property
+    def children(cls) -> List[ApplicationCommandMeta]:
+        """List[:class:`.ApplicationCommandMeta`]: The children commands of this command.
+
+        .. note::
+            This property is strictly read-only. Appending to the returned list will not have any effect.
+        """
+        return list(cls.__application_command_children__.values())
+
+    @property
+    def guild_id(cls) -> Optional[int]:
+        """:class:`int`: The ID of the guild this command is bound to.
+
+        If this is a global command this will be ``None``. Additionally, if it was not explicitly defined on the class, this will also be ``None``.
+
+        .. note::
+            This should only be used to modify the guild_id; using the guild_id returned from this property may not be very reliable.
+        """
+        return cls.__application_command_guild_id__ or None
+
+    @guild_id.setter
+    def guild_id(cls, value: Optional[int]) -> None:
+        if value is not None and not isinstance(value, int):
+            raise TypeError('guild_id must be a snowflake (represented by an int) or None')
+
+        if cls.tree:
+            cls.tree._modify_command_guild_id(cls, cls.__application_command_guild_id__, value)
+        cls.__application_command_guild_id__ = value
+
+    @property
+    def tree(cls) -> Optional[ApplicationCommandTree]:
+        """:class:`.ApplicationCommandTree`: The tree of commands this command is in.
+
+        If this command is not added to a tree, this will be ``None``.
+        """
+        return cls.__application_command_tree__ or None
+
+    @tree.setter
+    def tree(cls, value: ApplicationCommandTree) -> None:
+        if not isinstance(value, ApplicationCommandTree):
+            raise TypeError('tree must be an existing ApplicationCommandTree')
+
+        current = cls.__application_command_tree__
+        current.remove_command(cls)
+        value.add_command(cls)
+
 
 class ApplicationCommand(metaclass=ApplicationCommandMeta):
     """Represents an application command.
+    
+    To view information on the command itself, see documentation for :class:`.ApplicationCommandMeta`.
 
     Example
     -------

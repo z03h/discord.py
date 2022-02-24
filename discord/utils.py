@@ -208,6 +208,10 @@ def cached_slot_property(name: str) -> Callable[[Callable[[T], T_co]], CachedSlo
     return decorator
 
 
+if TYPE_CHECKING:
+    cached_slot_property = cached_property
+
+
 class SequenceProxy(Generic[T_co], collections.abc.Sequence):
     """Read-only proxy of a Sequence."""
 
