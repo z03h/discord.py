@@ -695,9 +695,10 @@ class Interaction:
     def native_command(self) -> Optional[NativeApplicationCommand]:
         """Type[:class:`application_commands.ApplicationCommand`]: The native command object which was declaratively defined in your codebase.
 
-        This is only available if the command is actually defined and if it is stored - else this will be ``None``.
+        This is only available if this interaction is a command interaction, otherwise this will be ``None``.
+        Additionally, the command must be actually defined and stored.
         """
-        return self._state._application_commands_store.commands.get(self.command.id)
+        return self.command and self._state._application_commands_store.commands.get(self.command.id)
 
     async def original_message(self) -> InteractionMessage:
         """|coro|
