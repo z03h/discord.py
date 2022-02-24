@@ -891,7 +891,7 @@ class Intents(BaseFlags):
         """
         return 1 << 14
 
-    # @flag_value  # waiting for api v10 update
+    @flag_value
     def message_content(self):
         """:class:`bool`: Whether you receive message content.
 
