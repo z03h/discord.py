@@ -208,6 +208,10 @@ def cached_slot_property(name: str) -> Callable[[Callable[[T], T_co]], CachedSlo
     return decorator
 
 
+if TYPE_CHECKING:
+    cached_slot_property = cached_property
+
+
 class SequenceProxy(Generic[T_co], collections.abc.Sequence):
     """Read-only proxy of a Sequence."""
 
@@ -309,7 +313,7 @@ def oauth_url(
     redirect_uri: :class:`str`
         An optional valid redirect URI.
     scopes: Iterable[:class:`str`]
-        An optional valid list of scopes. Defaults to ``('bot',)``.
+        An optional valid list of scopes. Defaults to ``('bot', 'applications.commands')``.
 
         .. versionadded:: 1.7
     disable_guild_select: :class:`bool`
@@ -323,7 +327,7 @@ def oauth_url(
         The OAuth2 URL for inviting the bot into guilds.
     """
     url = f'https://discord.com/oauth2/authorize?client_id={client_id}'
-    url += '&scope=' + '+'.join(scopes or ('bot',))
+    url += '&scope=' + '+'.join(scopes or ('bot', 'applications.commands'))
     if permissions is not MISSING:
         url += f'&permissions={permissions.value}'
     if guild is not MISSING:

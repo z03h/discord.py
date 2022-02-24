@@ -113,6 +113,9 @@ if TYPE_CHECKING:
     ApplicationCommandOptionTypeT = Union[ApplicationCommandType, _ApplicationCommandOptionTypeAnnotationT]
     AutocompleteCallbackT = Callable[['ApplicationCommandMeta', Interaction], Awaitable[AutocompleteChoicesT]]
 
+    RangeT = TypeVar('RangeT', bound='Range')
+    RangeArgumentT = TypeVar('RangeArgumentT', int, float)
+
 _PY_310 = sys.version_info >= (3, 10)
 
 if _PY_310:
@@ -175,6 +178,7 @@ __all__ = (
     'ApplicationCommandOption',
     'ApplicationCommandOptionChoice',
     'ApplicationCommandTree',
+    'Range',
     'SlashCommand',
     'MessageCommand',
     'UserCommand',
@@ -234,6 +238,20 @@ class ApplicationCommandTree:
         """
         return list(self._guild_commands[guild_id])
 
+    def command(self, *, guild_id: int = MISSING) -> Callable[[ApplicationCommandMeta], ApplicationCommandMeta]:
+        """Returns a decorator that adds the decorated command to this tree.
+
+        Parameters
+        ----------
+        guild_id: int
+            The ID of the guild to add the command to. Defaults to ``None``, which adds the command to all guilds.
+        """
+        def decorator(command: ApplicationCommandMeta) -> ApplicationCommandMeta:
+            self.add_command(command, guild_id=guild_id)
+            return command
+
+        return decorator
+
     def add_command(self, command: ApplicationCommandMeta, *, guild_id: int = MISSING) -> None:
         """Adds a command to this tree.
 
@@ -267,6 +285,42 @@ class ApplicationCommandTree:
         """
         for command in commands:
             self.add_command(command, guild_id=guild_id)
+
+    def remove_command(self, command: ApplicationCommandMeta, *, guild_id: int = MISSING) -> None:
+        """Removes command from this tree. If the command doesn't exist this will fail silently.
+
+        Parameters
+        ----------
+        command: Type[:class:`.ApplicationCommand`]
+            The command to remove.
+        guild_id: int
+            The ID of the guild that this command is in.
+            Leave as ``None`` if this command is global.
+
+            .. note::
+                This MUST be specified is this command is guild-specific.
+        """
+        guild_id = guild_id or command.__application_command_guild_id__ or self._guild_id
+
+        if not guild_id:
+            self._global_commands.discard(command)
+        else:
+            self._guild_commands[guild_id].discard(command)
+
+        command.__application_command_tree__ = None
+
+    def _modify_command_guild_id(self, command: ApplicationCommandMeta, old: int, new: int) -> None:
+        old = old or command.__application_command_guild_id__ or self._guild_id
+        if old is MISSING:
+            self._global_commands.discard(command)
+        else:
+            self._guild_commands[old].discard(command)
+
+        new = new or command.__application_command_guild_id__ or self._guild_id
+        if new is MISSING:
+            self._global_commands.add(command)
+        else:
+            self._guild_commands[new].add(command)
 
 
 class ApplicationCommandOptionChoice(NamedTuple):
@@ -462,7 +516,12 @@ def option(
 
     if type is not MISSING and not isinstance(type, ApplicationCommandOptionType):
         try:
-            type = OPTION_TYPE_MAPPING[type]
+            if isinstance(type, Range):
+                min_value = type.min_value if min_value is MISSING else min_value
+                max_value = type.max_value if max_value is MISSING else max_value
+                type = type._type
+            else:
+                type = OPTION_TYPE_MAPPING[type]  # type: ignore
         except KeyError:
             raise ValueError(f'{type!r} is an incompatable option type.')
 
@@ -586,6 +645,12 @@ def _resolve_option_annotation(
             entry = CHANNEL_TYPE_MAPPING[annotation]
             option.channel_types = [entry] if isinstance(entry, ChannelType) else list(entry)
 
+        if isinstance(annotation, Range):
+            option.min_value = annotation.min_value
+            option.max_value = annotation.max_value
+            option.type = annotation._type
+            return
+
         try:
             annotation = OPTION_TYPE_MAPPING[annotation]
         except KeyError:
@@ -640,6 +705,7 @@ def _get_application_command_options(
     return result
 
 
+# noinspection PyUnresolvedReferences
 class ApplicationCommandMeta(type):
     """The metaclass for defining an application command.
 
@@ -674,7 +740,7 @@ class ApplicationCommandMeta(type):
         __application_command_default_permission__: bool
         __application_command_options__: Dict[str, ApplicationCommandOption]
         __application_command_parent__: ApplicationCommandMeta
-        __application_command_children__: Dict[str, ApplicationCommand]
+        __application_command_children__: Dict[str, ApplicationCommandMeta]
         __application_command_guild_id__: int
         __application_command_tree__: ApplicationCommandTree
 
@@ -836,9 +902,121 @@ class ApplicationCommandMeta(type):
             False,
         )
 
+    @property
+    def type(cls) -> ApplicationCommandType:
+        """:class:`~.ApplicationCommandType`: The type of the command."""
+        return cls.__application_command_type__
+
+    @property
+    def name(cls) -> str:
+        """:class:`str`: The name of the command."""
+        return cls.__application_command_name__
+
+    @name.setter
+    def name(cls, value: str) -> None:
+        if not isinstance(value, str):
+            raise TypeError('command name must be a str')
+
+        if cls.__application_command_type__ is ApplicationCommandType.chat_input:
+            if any(map(str.isspace, value)):
+                raise ValueError('command name cannot contain whitespace.')
+
+            value = value.casefold()
+
+        cls.__application_command_name__ = value
+
+    @property
+    def description(cls) -> str:
+        """:class:`str`: The description of the command."""
+        return cls.__application_command_description__
+
+    @description.setter
+    def description(cls, value: str) -> None:
+        if not isinstance(value, str):
+            raise TypeError('command description must be a str')
+
+        cls.__application_command_description__ = value
+
+    @property
+    def default_permission(cls) -> bool:
+        """:class:`bool`: Whether or not this command is enabled by default when added to a guild."""
+        return cls.__application_command_default_permission__
+
+    @default_permission.setter
+    def default_permission(cls, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError('command default_permission must be a bool')
+
+        cls.__application_command_default_permission__ = value
+
+    @property
+    def options(cls) -> List[ApplicationCommandOption]:
+        """List[:class:`.ApplicationCommandOption`]: The options this command takes.
+
+        .. note::
+            This property is strictly read-only. Appending to the returned list will not have any effect.
+        """
+        return list(cls.__application_command_options__.values())
+
+    @property
+    def parent(cls) -> Optional[ApplicationCommandMeta]:
+        """:class:`.ApplicationCommandMeta`: The parent command of this command.
+
+        Only applicable to commands which are subcommand groups or subcommands. Otherwise, ``None`` is returned.
+        """
+        return cls.__application_command_parent__ or None
+
+    @property
+    def children(cls) -> List[ApplicationCommandMeta]:
+        """List[:class:`.ApplicationCommandMeta`]: The children commands of this command.
+
+        .. note::
+            This property is strictly read-only. Appending to the returned list will not have any effect.
+        """
+        return list(cls.__application_command_children__.values())
+
+    @property
+    def guild_id(cls) -> Optional[int]:
+        """:class:`int`: The ID of the guild this command is bound to.
+
+        If this is a global command this will be ``None``. Additionally, if it was not explicitly defined on the class, this will also be ``None``.
+
+        .. note::
+            This should only be used to modify the guild_id; using the guild_id returned from this property may not be very reliable.
+        """
+        return cls.__application_command_guild_id__ or None
+
+    @guild_id.setter
+    def guild_id(cls, value: Optional[int]) -> None:
+        if value is not None and not isinstance(value, int):
+            raise TypeError('guild_id must be a snowflake (represented by an int) or None')
+
+        if cls.tree:
+            cls.tree._modify_command_guild_id(cls, cls.__application_command_guild_id__, value)
+        cls.__application_command_guild_id__ = value
+
+    @property
+    def tree(cls) -> Optional[ApplicationCommandTree]:
+        """:class:`.ApplicationCommandTree`: The tree of commands this command is in.
+
+        If this command is not added to a tree, this will be ``None``.
+        """
+        return cls.__application_command_tree__ or None
+
+    @tree.setter
+    def tree(cls, value: ApplicationCommandTree) -> None:
+        if not isinstance(value, ApplicationCommandTree):
+            raise TypeError('tree must be an existing ApplicationCommandTree')
+
+        current = cls.__application_command_tree__
+        current.remove_command(cls)
+        value.add_command(cls)
+
 
 class ApplicationCommand(metaclass=ApplicationCommandMeta):
     """Represents an application command.
+    
+    To view information on the command itself, see documentation for :class:`.ApplicationCommandMeta`.
 
     Example
     -------
@@ -1178,6 +1356,76 @@ class ApplicationCommandStore:
             self.request_autocomplete_choices(command, option, interaction),
             name=f'discord-application-commands-dispatch-{interaction.id}',
         )
+
+
+class Range:
+    """A helper type annotation which represents a numeric value in the specified range.
+
+    This can be constructed via subscripting the class directly, just like any other generic type annotation.
+
+    - If you pass in two arguments, the first is the minimum value and the second is the maximum value.
+    - If you pass in one argument, there will be no minimum value and the value will be the maximum value.
+    - If any one of the arguments is a float, then the option type will be resolved to ``NUMBER``, else ``INTEGER``.
+
+    .. versionadded:: 2.0
+
+    Usage ::
+
+        from discord.application_commands import ApplicationCommand, Range, option
+
+        class Rate(ApplicationCommand):
+            \"""What rating would you give me?\"""
+            rating: Range[1, 10] = option(description="Your rating", required=True)
+    """
+
+    def __init__(self, min_value: RangeArgumentT = MISSING, max_value: RangeArgumentT = MISSING) -> None:
+        self.min_value: RangeArgumentT = min_value
+        self.max_value: RangeArgumentT = max_value
+
+        if min_value is MISSING and max_value is MISSING:
+            raise TypeError('at least one of min_value and max_value must be specified')
+
+    @staticmethod
+    def _is_int(value: RangeArgumentT) -> bool:
+        return value is MISSING or isinstance(value, int)
+
+    @property
+    def _type(self) -> ApplicationCommandOptionType:
+        if self._is_int(self.min_value) and self._is_int(self.max_value):
+            return ApplicationCommandOptionType.integer
+
+        return ApplicationCommandOptionType.number
+
+    def __class_getitem__(
+        cls: Type[RangeT],
+        item: Union[RangeArgumentT, Tuple[Optional[RangeArgumentT], Optional[RangeArgumentT]]],
+    ) -> RangeT:
+        if isinstance(item, (int, float)):
+            return cls(MISSING, item)
+
+        if isinstance(item, tuple):
+            if len(item) > 2:
+                raise TypeError(f'expected 2 arguments, got {len(item)} instead.')
+
+            if len(item) == 1:
+                return cls(MISSING, item[0])
+
+            lower, upper = item
+            return cls(MISSING if lower is None else lower, MISSING if upper is None else upper)
+
+        raise TypeError('invalid range arguments specified.')
+
+
+if TYPE_CHECKING:
+    class Range(int, float):
+        min_value: Union[int, float]
+        max_value: Union[int, float]
+
+        def __class_getitem__(
+            cls: Type[RangeT],
+            item: Union[RangeArgumentT, Tuple[Optional[RangeArgumentT], Optional[RangeArgumentT]]],
+        ) -> RangeT:
+            ...
 
 
 # shortcuts

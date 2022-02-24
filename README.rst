@@ -28,9 +28,6 @@ As a result of this, naming schemes that go along "slash command" have been rena
 that go along with "application_command". This unfortunately does make things a bit verbose, however
 shortening the names would leave name conflicts and confusion.
 
-Additionally, accessing information about the command itself requires accessing an attribute with a
-relatively verbose name (e.g. ``__application_command_name__``)
-
 What's been added?
 ~~~~~~~~~~~~~~~~~~
 - Application commands
