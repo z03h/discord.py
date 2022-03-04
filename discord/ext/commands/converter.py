@@ -920,7 +920,7 @@ class GuildEventConverter(IDConverter[discord.GuildEvent]):
         else:
             pattern = (
                 r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/events/'
-                r'(?P<guild_id>[0-9]{15,20})'
+                r'(?P<guild_id>[0-9]{15,20})/'
                 r'(?P<event_id>[0-9]{15,20})'
             )
             match = re.match(pattern, argument, flags=re.I)
