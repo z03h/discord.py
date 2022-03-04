@@ -513,7 +513,7 @@ class Intents(BaseFlags):
         self = cls.all()
         self.presences = False
         self.members = False
-        # self.message_content = False  # delay api v10
+        self.message_content = False
         return self
 
     @flag_value
